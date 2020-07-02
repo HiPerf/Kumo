@@ -1,0 +1,8 @@
+
+queue reliable : reliable_queue {
+	<> # Default packer, equivalent to <immediate_packer>
+}
+
+queue ordered : reliable_queue {
+	<ordered_packer>
+}

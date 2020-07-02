@@ -1,0 +1,14 @@
+message spawn_data
+{
+	int64 id;
+	int8 x;
+	int8 y;
+}
+
+message movement
+{
+	int8 direction;
+}
+
+reliable s2c spawn(spawn_data);
+ordered c2s move(movement) if status == InWorld; # All if have by default 'else handler'
