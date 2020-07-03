@@ -10,5 +10,14 @@ message movement
 	int8 direction;
 }
 
+message complex
+{
+	optional uint32 x;
+	vector<spawn_data> y;
+	int32 z;
+	optional vector<bool> w;
+}
+
+reliable s2c do_sth(complex);
 reliable s2c spawn(spawn_data);
 ordered c2s move(movement) if status == InWorld; # All if have by default 'else handler'

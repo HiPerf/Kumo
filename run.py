@@ -8,8 +8,6 @@ import glob
 
 
 def main():
-    print(sys.argv)
-
     parser = argparse.ArgumentParser(description='Generates network marshalling code.')
     parser.add_argument('--role', help='Either server or client', required=True)
     parser.add_argument('--dir', help='folder containing .kumo files', required=True)
@@ -34,7 +32,7 @@ def main():
             mainbox = parser.parse(lexer.lex(fp.read()))
             for result in mainbox.eval():
                 name = result.name.eval()
-                print
+                
                 if isinstance(result, lib.boxes.MessageBox):
                     if name in messages:
                         raise NotImplementedError(f'Message `{name}` already parsed')

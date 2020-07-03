@@ -144,7 +144,7 @@ def number(p):
 
 @pg.production("direction : C2S")
 def identifier(p):
-    return IdentifierBox(p[0])
+    return DirectionBox(p[0])
 
 @pg.production("direction : S2C")
 def identifier(p):

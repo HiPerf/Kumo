@@ -26,11 +26,12 @@ class Statement(object):
         return self._eval(level, 'both')
 
 class Scope(list):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, content=[], indent=False):
+        super().__init__(content)
+        self.indent = indent
 
     def _eval(self, level, fn):
-        return '\n'.join(getattr(x, fn)(level + 1) for x in self)
+        return ''.join(getattr(x, fn)(level + int(self.indent)) for x in self)
     
     def decl(self, level):
         return self._eval(level, 'decl')
@@ -45,13 +46,13 @@ class Scope(list):
         return self.decl(0)
 
 class Block(Scope):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, content=[]):
+        super().__init__(content)
 
     def _eval(self, level, fn):
         preface = indent('{\n', level)
         postface = indent('}\n', level)
-        return preface + super()._eval(level, fn) + postface
+        return preface + super()._eval(level + 1, fn) + postface
     
     def decl(self, level):
         return self._eval(level, 'decl')
