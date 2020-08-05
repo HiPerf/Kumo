@@ -68,7 +68,7 @@ def main():
 
     # Chose generator based on language selected
     try:
-        LangModule = getattr(lib.lang, args.lang)
+        LangModule = getattr(lib.lang, args.lang.replace('-', '_'))
         generator = LangModule.LangGenerator(role, queues, messages, programs)
     except:
         raise NotImplementedError(f'Language {args.lang} is not yet supported')

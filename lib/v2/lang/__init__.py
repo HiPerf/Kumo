@@ -1,1 +1,1 @@
-from . import cpp
+from . import kaminari_cpp

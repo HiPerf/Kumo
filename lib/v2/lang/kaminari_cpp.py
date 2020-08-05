@@ -97,12 +97,12 @@ class LangGenerator(generator.Generator):
                     gen.Statement('size += sizeof(uint8_t)'),
                     gen.Statement(f'for (const auto& val : {variable})', ending=''),
                     gen.Block([
-                        gen.Statement(f'size += sizeof_{inner}(val)')
+                        gen.Statement(f'size += packet_size(val)')
                     ])
                 ])
             
         elif self.is_message(dtype):
-            return gen.Statement(f'size += sizeof_{dtype}({variable})')
+            return gen.Statement(f'size += packet_size({variable})')
         else:
             return gen.Statement(f'size += sizeof({dtype})')
 
@@ -160,7 +160,7 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         methods = []
-        method = gen.Method('uint8_t', f'sizeof_{message_name}', [
+        method = gen.Method('uint8_t', f'packet_size', [
             gen.Variable(f'const {message_name}&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
         methods.append(method)
@@ -186,7 +186,7 @@ class LangGenerator(generator.Generator):
                         self.__write_size(decl, f'*data.{name}')
                     ]))
                 else:
-                    method.append(self.__write_size(decl, f'*data.{name}'))
+                    method.append(self.__write_size(decl, f'data.{name}'))
 
         print(method.both(0))
         return methods
