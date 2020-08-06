@@ -1,11 +1,17 @@
 from .. import generator
 from .. import gen
 from .. import boxes
+from .. import semantic
 
 
-def if_template(x):
+
+TYPE_CONVERSION = {
+    dtype : dtype if all(not c.isnumeric() for c in dtype) else dtype + '_t' for dtype in semantic.TRIVIAL_TYPES
+}
+
+def if_template_or_inline(x):
     try:
-        return x.template is not None
+        return x.template is not None or 'inline' in x.decl_modifiers
     except:
         return None
 
@@ -17,19 +23,31 @@ class File(object):
 
     def add(self, code):
         self.sources.append(code)
-            
-    def __str__(self):
+
+    def _root(self, prepend: list):
         if self.namespace is not None:
-            code_root = gen.Scope([
+            return gen.Scope(prepend + [
                 gen.Statement(f'namespace {self.namespace}', ending=''),
                 gen.Block(self.sources)
             ])
         else:
-            code_root = gen.Scope(self.sources)
-        
+            return gen.Scope(prepend + self.sources)
+
+    def header(self, prepend=[]):
+        header_decl = self._root(prepend).decl(0)
+        header_inst = self._root([]).both(0, eval_fn=lambda x: if_template_or_inline(x) in (None, True))
+
+        return header_decl + '\n' + header_inst
+
+    def source(self, prepend=[]):
+        source = self._root(prepend).instance(0, eval_fn=lambda x: if_template_or_inline(x) in (None, False))
+        return source
+    
+    def __str__(self):
+        code_root = self._root([])
         header_decl = code_root.decl(0)
-        header_inst = code_root.instance(0, eval_fn=lambda x: if_template(x) in (None, True))
-        source = code_root.instance(0, eval_fn=lambda x: if_template(x) in (None, False))
+        header_inst = code_root.both(0, eval_fn=lambda x: if_template_or_inline(x) in (None, True))
+        source = code_root.instance(0, eval_fn=lambda x: if_template_or_inline(x) in (None, False))
 
         return header_decl + header_inst + '\n---------------------\n' + source + '\n---------------------\n' 
 
@@ -144,7 +162,7 @@ class LangGenerator(generator.Generator):
         elif self.is_message(dtype):
             return gen.Statement(f'size += packet_size({variable})')
         else:
-            return gen.Statement(f'size += sizeof({dtype})')
+            return gen.Statement(f'size += sizeof_{dtype}()')
 
     def _generate_message_packer(self, message: boxes.MessageBox):
         message_name = message.name.eval()
@@ -379,6 +397,12 @@ class LangGenerator(generator.Generator):
             gen.Block(details_methods)
         ]))
 
+        # Trivial types size
+        for dtype, ctype in TYPE_CONVERSION.items():
+            method = gen.Method('uint8_t', f'sizeof_{dtype}', decl_modifiers=['inline'])
+            method.append(gen.Statement(f'return static_cast<uint8_t>(sizeof({ctype}))'))
+            self.marshall_file.add(method)
+
         # General packet handler
         method = gen.Method('bool', 'handle_packet', [
             gen.Variable('packet_reader*', 'packet'),
@@ -396,7 +420,32 @@ class LangGenerator(generator.Generator):
         ]))
 
         self.marshall_file.add(method)
-
-
-        print(self.rpc_file)
         
+        
+    def dump(self, path, include_path):
+        with open(f'{path}/marshall.hpp', 'w') as fp:
+            fp.write(self.marshall_file.header())
+
+        with open(f'{path}/marshall.cpp', 'w') as fp:
+            fp.write(self.marshall_file.source())
+
+        with open(f'{path}/rpc.hpp', 'w') as fp:
+            fp.write(self.rpc_file.header([
+                gen.Statement(f'#include "{include_path}/rpc_detail.hpp"', ending=''),
+                gen.Statement('class client'),
+                gen.Statement('template <typename B> class broadcaster')
+            ]))
+
+        with open(f'{path}/rpc.cpp', 'w') as fp:
+            fp.write(self.rpc_file.source([
+                gen.Statement(f'#include "{include_path}/rpc.hpp"', ending='')
+            ]))
+
+        with open(f'{path}/rpc_detail.hpp', 'w') as fp:
+            fp.write(self.rpc_detail_file.header())
+
+        with open(f'{path}/rpc_detail.cpp', 'w') as fp:
+            fp.write(self.rpc_detail_file.source())
+
+
+        # self.opcodes_file = File(namespace='kaminari')

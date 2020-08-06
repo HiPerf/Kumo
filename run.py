@@ -13,6 +13,7 @@ def main():
     parser.add_argument('--dir', help='folder containing .kumo files', required=True)
     parser.add_argument('--out', help='folder to output files', required=True)
     parser.add_argument('--lang', help='Generator language', required=True)
+    parser.add_argument('--include-path', help='Path where compiler can find this files, cpp', default=None)
     args = parser.parse_args()
 
     assert args.role in ('server', 'client'), f'Unexpected role {args.role}, must be server or client'
@@ -74,20 +75,7 @@ def main():
         raise NotImplementedError(f'Language {args.lang} is not yet supported')
 
     generator.generate()
-    
-    ## Generate all queues
-    #generator.generate_queues(queues)
-
-    ## Generate all messages    
-    #for result in messages.values():
-    #    generator.generate_message(result)
-
-    ## Generate all programs
-    #for program in programs.values():
-    #    generator.generate_program(program, queues, messages)
-
-    #generator.generate_common()
-    #generator.dump(args.out)
+    generator.dump(args.out, args.include_path or args.out)
 
 
 if __name__ == '__main__':

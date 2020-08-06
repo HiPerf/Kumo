@@ -44,6 +44,9 @@ class Generator(object):
     def _generate_internals(self):
         pass
 
+    def dump(self, path, include_path):
+        raise NotImplementedError()
+
 
     # Generates a deterministic (given the same inputs in the same order) opcode from a name
     def get_opcode(self, program_name):
@@ -138,5 +141,3 @@ class Generator(object):
             self.generate_program(program)
 
         self._generate_internals()
-    
-    
