@@ -3,25 +3,35 @@ from .. import gen
 from .. import boxes
 
 
+def if_template(x):
+    try:
+        return x.template is not None
+    except:
+        return None
+
+
 class File(object):
-    def __init__(self):
-        self.header_decl = ''
-        self.header_inst = ''
-        self.source = ''
+    def __init__(self, namespace=None):
+        self.sources = []
+        self.namespace = namespace
 
     def add(self, code):
-        self.header_decl += code.decl(0)
-        try:
-            if code.template is not None or 'inline' in code.decl_modifiers:
-                self.header_inst += code.instance(0)
-            else:
-                raise NotImplementedError()
-        except:
-            self.source += code.instance(0)
+        self.sources.append(code)
             
-
     def __str__(self):
-        return self.header_decl + self.header_inst + '\n---------------------\n' + self.source + '\n---------------------\n' 
+        if self.namespace is not None:
+            code_root = gen.Scope([
+                gen.Statement(f'namespace {self.namespace}', ending=''),
+                gen.Block(self.sources)
+            ])
+        else:
+            code_root = gen.Scope(self.sources)
+        
+        header_decl = code_root.decl(0)
+        header_inst = code_root.instance(0, eval_fn=lambda x: if_template(x) in (None, True))
+        source = code_root.instance(0, eval_fn=lambda x: if_template(x) in (None, False))
+
+        return header_decl + header_inst + '\n---------------------\n' + source + '\n---------------------\n' 
 
 
 class LangGenerator(generator.Generator):
@@ -32,10 +42,10 @@ class LangGenerator(generator.Generator):
         self.handler_programs = set()
 
         # Output code
-        self.marshall_file = File()
-        self.opcodes_file = File()
-        self.rpc_file = File()
-        self.rpc_detail_file = File()
+        self.marshall_file = File(namespace='kaminari')
+        self.opcodes_file = File(namespace='kaminari')
+        self.rpc_file = File(namespace='kaminari')
+        self.rpc_detail_file = File(namespace='kaminari')
 
     def __is_trivial(self, message: boxes.MessageBox):
         for decl in message.fields.eval():
@@ -258,9 +268,9 @@ class LangGenerator(generator.Generator):
 
         # Global broadcast send without callback
         method = gen.Method('void', f'broadcast_{program_name}', [
-            gen.Variable('broadcaster*', 'broadcaster'),
+            gen.Variable('broadcaster<B>*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data')
-        ], visibility=gen.Visibility.PUBLIC)
+        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
         methods.append(method)
 
         method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name})'))
@@ -271,10 +281,10 @@ class LangGenerator(generator.Generator):
 
         # Global broadcast with callback
         method = gen.Method('void', f'broadcast_{program_name}', [
-            gen.Variable('broadcaster*', 'broadcaster'),
+            gen.Variable('broadcaster<B>*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data'),
             gen.Variable('T&&', 'callback')
-        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename T>', ending=''))
+        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
         methods.append(method)
 
         method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name}, std::forward<T>(callback))'))
@@ -285,9 +295,9 @@ class LangGenerator(generator.Generator):
 
         # Global broadcast send without callback
         method = gen.Method('void', f'broadcast_single_{program_name}', [
-            gen.Variable('broadcaster*', 'broadcaster'),
+            gen.Variable('broadcaster<B>*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data')
-        ], visibility=gen.Visibility.PUBLIC)
+        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
         methods.append(method)
 
         method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name})'))
@@ -298,10 +308,10 @@ class LangGenerator(generator.Generator):
 
         # Global broadcast with callback
         method = gen.Method('void', f'broadcast_single_{program_name}', [
-            gen.Variable('broadcaster*', 'broadcaster'),
+            gen.Variable('broadcaster<B>*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data'),
             gen.Variable('T&&', 'callback')
-        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename T>', ending=''))
+        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
         methods.append(method)
 
         method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name}, std::forward<T>(callback))'))
@@ -312,7 +322,6 @@ class LangGenerator(generator.Generator):
         
         for method in methods:
             self.rpc_file.add(method)
-
 
         return methods
 
@@ -348,7 +357,6 @@ class LangGenerator(generator.Generator):
         ]))
 
         method.append(gen.Statement(f'client->on_{program_name}(packet)'))
-        print(method.both(0))
 
         self.handler_programs.add(program)
 
@@ -388,4 +396,7 @@ class LangGenerator(generator.Generator):
         ]))
 
         self.marshall_file.add(method)
+
+
+        print(self.rpc_file)
         
