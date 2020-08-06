@@ -1,5 +1,5 @@
-#include "out/marshall.hpp"
-#include "out/rpc.hpp"
+#include <kumo/marshall.hpp>
+#include <kumo/rpc.hpp>
 namespace kumo
 {
     void send_do_sth(client* client, complex&& data)

@@ -491,7 +491,7 @@ class LangGenerator(generator.Generator):
         with open(f'{path}/marshall.hpp', 'w') as fp:
             fp.write(self.marshall_file.header([
                 gen.Statement(f'#include <inttypes.h>', ending=''),
-                gen.Statement(f'#include "{include_path}/structs.hpp"', ending=''),
+                gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement('class client'),
                 kaminari_fwd(gen.Statement('class packet_reader')),
                 packet_fwd()
@@ -499,17 +499,17 @@ class LangGenerator(generator.Generator):
 
         with open(f'{path}/marshall.cpp', 'w') as fp:
             fp.write(self.marshall_file.source([
-                gen.Statement(f'#include "{include_path}/opcodes.hpp"', ending=''),
-                gen.Statement(f'#include "{include_path}/marshall.hpp"', ending=''),
+                gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/marshall.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
             ]))
 
         with open(f'{path}/rpc.hpp', 'w') as fp:
             fp.write(self.rpc_file.header([
-                gen.Statement(f'#include "{include_path}/opcodes.hpp"', ending=''),
-                gen.Statement(f'#include "{include_path}/rpc_detail.hpp"', ending=''),
-                gen.Statement(f'#include "{include_path}/structs.hpp"', ending=''),
+                gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/broadcaster.hpp>', ending=''),
                 gen.Statement('class client'),
@@ -517,8 +517,8 @@ class LangGenerator(generator.Generator):
 
         with open(f'{path}/rpc.cpp', 'w') as fp:
             fp.write(self.rpc_file.source([
-                gen.Statement(f'#include "{include_path}/marshall.hpp"', ending=''),
-                gen.Statement(f'#include "{include_path}/rpc.hpp"', ending=''),
+                gen.Statement(f'#include <{include_path}/marshall.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/rpc.hpp>', ending=''),
             ]))
 
         with open(f'{path}/rpc_detail.hpp', 'w') as fp:
@@ -530,7 +530,7 @@ class LangGenerator(generator.Generator):
 
         with open(f'{path}/rpc_detail.cpp', 'w') as fp:
             fp.write(self.rpc_detail_file.source([
-                gen.Statement(f'#include "{include_path}/rpc_detail.hpp"', ending=''),
+                gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
             ]))
 
         with open(f'{path}/structs.hpp', 'w') as fp:

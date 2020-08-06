@@ -1,4 +1,4 @@
-#include "out/rpc_detail.hpp"
+#include <kumo/rpc_detail.hpp>
 namespace kumo
 {
     namespace detail

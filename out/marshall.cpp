@@ -1,5 +1,5 @@
-#include "out/opcodes.hpp"
-#include "out/marshall.hpp"
+#include <kumo/opcodes.hpp>
+#include <kumo/marshall.hpp>
 #include <kaminari/buffers/packet.hpp>
 #include <kaminari/buffers/packet_reader.hpp>
 namespace kumo

@@ -1,6 +1,6 @@
-#include "out/opcodes.hpp"
-#include "out/rpc_detail.hpp"
-#include "out/structs.hpp"
+#include <kumo/opcodes.hpp>
+#include <kumo/rpc_detail.hpp>
+#include <kumo/structs.hpp>
 #include <kaminari/buffers/packet.hpp>
 #include <kaminari/broadcaster.hpp>
 class client;

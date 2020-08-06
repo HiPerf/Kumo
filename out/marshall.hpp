@@ -1,5 +1,5 @@
 #include <inttypes.h>
-#include "out/structs.hpp"
+#include <kumo/structs.hpp>
 class client;
 namespace kaminari
 {

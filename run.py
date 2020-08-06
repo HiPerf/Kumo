@@ -75,7 +75,7 @@ def main():
         raise NotImplementedError(f'Language {args.lang} is not yet supported')
 
     generator.generate()
-    generator.dump(args.out, args.include_path or args.out)
+    generator.dump(args.out, args.include_path or 'kumo')
 
 
 if __name__ == '__main__':
