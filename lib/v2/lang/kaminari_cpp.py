@@ -3,9 +3,39 @@ from .. import gen
 from .. import boxes
 
 
+class File(object):
+    def __init__(self):
+        self.header_decl = ''
+        self.header_inst = ''
+        self.source = ''
+
+    def add(self, code):
+        self.header_decl += code.decl(0)
+        try:
+            if code.template is not None or 'inline' in code.decl_modifiers:
+                self.header_inst += code.instance(0)
+            else:
+                raise NotImplementedError()
+        except:
+            self.source += code.instance(0)
+            
+
+    def __str__(self):
+        return self.header_decl + self.header_inst + '\n---------------------\n' + self.source + '\n---------------------\n' 
+
+
 class LangGenerator(generator.Generator):
     def __init__(self, role, queues, messages, programs):
         super().__init__(role, queues, messages, programs)
+        
+        # Some helpers
+        self.handler_programs = set()
+
+        # Output code
+        self.marshall_file = File()
+        self.opcodes_file = File()
+        self.rpc_file = File()
+        self.rpc_detail_file = File()
 
     def __is_trivial(self, message: boxes.MessageBox):
         for decl in message.fields.eval():
@@ -126,14 +156,14 @@ class LangGenerator(generator.Generator):
             else:
                 method.append(self.__write_type(decl, f'data.{name}'))
 
-        print(method.both(0))
-        return method
+        self.marshall_file.add(method)
+        return [method]
 
     def _generate_message_unpacker(self, message: boxes.MessageBox):
         message_name = message.name.eval()
 
         method = gen.Method('bool', f'unpack_{message_name}', [
-            gen.Variable('PacketReader*', 'packet'),
+            gen.Variable('packet_reader*', 'packet'),
             gen.Variable(f'{message_name}&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
 
@@ -153,7 +183,7 @@ class LangGenerator(generator.Generator):
             else:
                 method.append(self.__read_type(decl, f'data.{name}'))
 
-        print(method.both(0))
+        self.marshall_file.add(method)
         return method
 
     def _generate_message_size(self, message: boxes.MessageBox):
@@ -188,7 +218,9 @@ class LangGenerator(generator.Generator):
                 else:
                     method.append(self.__write_size(decl, f'data.{name}'))
 
-        print(method.both(0))
+        for method in methods:
+            self.marshall_file.add(method)
+
         return methods
 
     def _generate_program_send(self, program: boxes.ProgramBox):
@@ -210,8 +242,7 @@ class LangGenerator(generator.Generator):
 
         method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name})'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'client->send_{queue}(packet)'))
-        print(method.both(0))
+        method.append(gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)'))
 
         # Individual with callback
         method = gen.Method('void', f'send_{program_name}', [
@@ -223,26 +254,24 @@ class LangGenerator(generator.Generator):
 
         method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name}, std::forward<T>(callback))'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'client->send_{queue}(packet)'))
-        print(method.both(0))
+        method.append(gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)'))
 
-        # Individual send without callback
+        # Global broadcast send without callback
         method = gen.Method('void', f'broadcast_{program_name}', [
-            gen.Variable('Cell*', 'cell'),
+            gen.Variable('broadcaster*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
         methods.append(method)
 
         method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name})'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'cell->broadcast([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'client->send_{queue}(packet)')], True))
+        method.append(gen.Statement(f'broadcaster->broadcast([packet](auto client) {{', ending=''))
+        method.append(gen.Scope([gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)')], True))
         method.append(gen.Statement(f'}})'))
-        print(method.both(0))
 
-        # Individual with callback
+        # Global broadcast with callback
         method = gen.Method('void', f'broadcast_{program_name}', [
-            gen.Variable('Cell*', 'cell'),
+            gen.Variable('broadcaster*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data'),
             gen.Variable('T&&', 'callback')
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename T>', ending=''))
@@ -250,9 +279,113 @@ class LangGenerator(generator.Generator):
 
         method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name}, std::forward<T>(callback))'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'cell->broadcast([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'client->send_{queue}(packet)')], True))
+        method.append(gen.Statement(f'broadcaster->broadcast([packet](auto client) {{', ending=''))
+        method.append(gen.Scope([gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)')], True))
         method.append(gen.Statement(f'}})'))
-        print(method.both(0))
+
+        # Global broadcast send without callback
+        method = gen.Method('void', f'broadcast_single_{program_name}', [
+            gen.Variable('broadcaster*', 'broadcaster'),
+            gen.Variable(f'{message_name}&&', 'data')
+        ], visibility=gen.Visibility.PUBLIC)
+        methods.append(method)
+
+        method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name})'))
+        method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
+        method.append(gen.Statement(f'broadcaster->broadcast_single([packet](auto client) {{', ending=''))
+        method.append(gen.Scope([gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)')], True))
+        method.append(gen.Statement(f'}})'))
+
+        # Global broadcast with callback
+        method = gen.Method('void', f'broadcast_single_{program_name}', [
+            gen.Variable('broadcaster*', 'broadcaster'),
+            gen.Variable(f'{message_name}&&', 'data'),
+            gen.Variable('T&&', 'callback')
+        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename T>', ending=''))
+        methods.append(method)
+
+        method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name}, std::forward<T>(callback))'))
+        method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
+        method.append(gen.Statement(f'broadcaster->broadcast_single([packet](auto client) {{', ending=''))
+        method.append(gen.Scope([gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)')], True))
+        method.append(gen.Statement(f'}})'))
+        
+        for method in methods:
+            self.rpc_file.add(method)
+
 
         return methods
+
+    def _generate_program_recv(self, program: boxes.ProgramBox):
+        # Helpers
+        program_name = program.name.eval()
+        args = program.args.eval()
+        message_name = args[0]
+
+        method = gen.Method('bool', f'handle_{program_name}', [
+            gen.Variable('packet_reader*', 'packet'),
+            gen.Variable('client*', 'client')
+        ])
+
+        if program.cond.attr is not None:
+            attr = program.cond.attr.eval()
+            value = program.cond.value.eval()
+            false_case = program.cond.false_case
+            if false_case.action is not None:
+                false_case = false_case.action.eval()
+            else:
+                false_case = 'handle_client_status_error'
+
+            method.append(gen.Statement(f'if (client->{attr}() != {attr}::{value})', ending=''))
+            method.append(gen.Block([
+                gen.Statement(f'return {false_case}(packet->opcode(), client->{attr}(), {attr}::{value})')
+            ]))
+        
+        method.append(gen.Statement(f'const {message_name} data'))
+        method.append(gen.Statement(f'if (!unpack_{message_name}(packet, data)', ending=''))
+        method.append(gen.Block([
+            gen.Statement('return false')
+        ]))
+
+        method.append(gen.Statement(f'client->on_{program_name}(packet)'))
+        print(method.both(0))
+
+        self.handler_programs.add(program)
+
+        return [method]
+
+    def _generate_internals(self):
+        # Per queue internal send to hide implementation details
+        details_methods = []
+
+        for queue in self.queues.keys():
+            method = gen.Method('void', f'send_{queue}', [
+                gen.Variable('client*', 'client'),
+                gen.Variable('const packet::ptr&', 'packet')
+            ], visibility=gen.Visibility.PUBLIC)
+            method.append(gen.Statement(f'client->send_{queue}(packet)'))
+            details_methods.append(method)
+
+        self.rpc_detail_file.add(gen.Scope([
+            gen.Statement('namespace detail', ending=''),
+            gen.Block(details_methods)
+        ]))
+
+        # General packet handler
+        method = gen.Method('bool', 'handle_packet', [
+            gen.Variable('packet_reader*', 'packet'),
+            gen.Variable('client*', 'client')
+        ])
+
+        method.append(gen.Statement('switch (packet->opcode())', ending=''))
+        method.append(gen.Block([
+            gen.Scope([
+                gen.Statement(f'case opcode::{program.name.eval()}:', ending=''),
+                gen.Scope([
+                    gen.Statement(f'return handle_{program.name.eval()}(packet, client)') 
+                ], indent=True)
+            ]) for program in self.handler_programs
+        ]))
+
+        self.marshall_file.add(method)
+        

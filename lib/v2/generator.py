@@ -41,6 +41,9 @@ class Generator(object):
     def _generate_program_recv(self, message):
         raise NotImplementedError()
 
+    def _generate_internals(self):
+        pass
+
 
     # Generates a deterministic (given the same inputs in the same order) opcode from a name
     def get_opcode(self, program_name):
@@ -133,4 +136,7 @@ class Generator(object):
     def generate(self):
         for program in self.programs.values():
             self.generate_program(program)
+
+        self._generate_internals()
+    
     
