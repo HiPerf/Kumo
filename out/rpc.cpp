@@ -1,16 +1,17 @@
+#include "out/marshall.hpp"
 #include "out/rpc.hpp"
-namespace kaminari
+namespace kumo
 {
-    void send_do_sth(Client* client, complex&& data)
+    void send_do_sth(client* client, complex&& data)
     {
-        Packet::Ptr packet = Packet::make(opcode::do_sth);
+        ::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::do_sth);
         pack_complex(packet, data);
-        ::kaminari::detail::send_reliable(client, packet);
+        ::kumo::detail::send_reliable(client, packet);
     }
-    void send_spawn(Client* client, spawn_data&& data)
+    void send_spawn(client* client, spawn_data&& data)
     {
-        Packet::Ptr packet = Packet::make(opcode::spawn);
+        ::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::spawn);
         pack_spawn_data(packet, data);
-        ::kaminari::detail::send_reliable(client, packet);
+        ::kumo::detail::send_reliable(client, packet);
     }
 }

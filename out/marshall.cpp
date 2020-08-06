@@ -1,6 +1,10 @@
-namespace kaminari
+#include "out/opcodes.hpp"
+#include "out/marshall.hpp"
+#include <kaminari/buffers/packet.hpp>
+#include <kaminari/buffers/packet_reader.hpp>
+namespace kumo
 {
-    void pack_complex(const Packet::Ptr& packet, const complex& data)
+    void pack_complex(const ::kaminari::packet::ptr& packet, const complex& data)
     {
         *packet << static_cast<bool>(data.x);
         if (static_cast<bool>(data.x))
@@ -39,7 +43,7 @@ namespace kaminari
             size += sizeof(uint8_t) + (*data.w).size() * sizeof_bool();
         }
     }
-    void pack_spawn_data(const Packet::Ptr& packet, const spawn_data& data)
+    void pack_spawn_data(const ::kaminari::packet::ptr& packet, const spawn_data& data)
     {
         *packet << data.id;
         *packet << data.x;
@@ -54,7 +58,7 @@ namespace kaminari
     {
         return sizeof(spawn_data);
     }
-    bool unpack_movement(packet_reader* packet, movement& data)
+    bool unpack_movement(::kaminari::packet_reader* packet, movement& data)
     {
         data.direction = packet->read<int8>();
     }
@@ -67,7 +71,7 @@ namespace kaminari
     {
         return sizeof(movement);
     }
-    bool handle_packet(packet_reader* packet, client* client)
+    bool handle_packet(::kaminari::packet_reader* packet, client* client)
     {
         switch (packet->opcode())
         {

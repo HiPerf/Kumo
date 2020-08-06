@@ -8,6 +8,9 @@ from .. import semantic
 TYPE_CONVERSION = {
     dtype : dtype if all(not c.isnumeric() for c in dtype) else dtype + '_t' for dtype in semantic.TRIVIAL_TYPES
 }
+TYPE_CONVERSION['vector'] = 'std::vector'
+TYPE_CONVERSION['optional'] = 'std::optional'
+
 
 def if_template_or_inline(x):
     try:
@@ -60,13 +63,14 @@ class LangGenerator(generator.Generator):
         self.handler_programs = set()
 
         # Output code
-        self.marshall_file = File(namespace='kaminari')
-        self.opcodes_file = File(namespace='kaminari')
-        self.rpc_file = File(namespace='kaminari')
-        self.rpc_detail_file = File(namespace='kaminari')
+        self.marshall_file = File(namespace='kumo')
+        self.opcodes_file = File(namespace='kumo')
+        self.rpc_file = File(namespace='kumo')
+        self.rpc_detail_file = File(namespace='kumo')
+        self.structs_file = File(namespace='kumo')
 
     def __is_trivial(self, message: boxes.MessageBox):
-        for decl in message.fields.eval():
+        for decl in self.message_fields_including_base(message):
             # Optional implies we might have variant sizes
             if decl.optional:
                 return False
@@ -164,15 +168,47 @@ class LangGenerator(generator.Generator):
         else:
             return gen.Statement(f'size += sizeof_{dtype}()')
 
+    def _generate_structure(self, message: boxes.MessageBox):
+        message_name = message.name.eval()
+
+        base = ''
+        if message.base.name is not None:
+            base = f': public {message.base.name.eval()}'
+
+        struct = gen.Class(message_name, decl_name_base=base, cpp_style=True, keyword='struct')
+        for decl in message.fields.eval():
+            dtype = decl.dtype.dtype.eval()
+            ctype = '{}'
+            if decl.optional:
+                ctype = 'std::optional<{}>'
+
+            temp = dtype
+            if dtype == 'vector':
+                ctype = ctype.format('std::vector<{}>')
+                temp = decl.dtype.spec.eval()
+            
+            if not self.is_message(temp):
+                temp = TYPE_CONVERSION[temp]
+            
+            ctype = ctype.format(temp)
+
+            struct.attributes.append(gen.Attribute(
+                ctype, 
+                decl.name.eval(),
+                visibility=gen.Visibility.PUBLIC
+            ))
+
+        self.structs_file.add(struct)
+
     def _generate_message_packer(self, message: boxes.MessageBox):
         message_name = message.name.eval()
 
         method = gen.Method('void', f'pack_{message_name}', [
-            gen.Variable('const Packet::Ptr&', 'packet'),
+            gen.Variable('const ::kaminari::packet::ptr&', 'packet'),
             gen.Variable(f'const {message_name}&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
 
-        for decl in message.fields.eval():
+        for decl in self.message_fields_including_base(message):
             name = decl.name.eval()
 
             if decl.optional:
@@ -191,11 +227,11 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         method = gen.Method('bool', f'unpack_{message_name}', [
-            gen.Variable('packet_reader*', 'packet'),
+            gen.Variable('::kaminari::packet_reader*', 'packet'),
             gen.Variable(f'{message_name}&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
 
-        for decl in message.fields.eval():
+        for decl in self.message_fields_including_base(message):
             name = decl.name.eval()
 
             if decl.optional:
@@ -234,7 +270,7 @@ class LangGenerator(generator.Generator):
         else:
             method.append(gen.Statement('uint8_t size = 0'))    
             # Manually loop all types
-            for decl in message.fields.eval():
+            for decl in self.message_fields_including_base(message):
                 name = decl.name.eval()
 
                 if decl.optional:
@@ -263,79 +299,79 @@ class LangGenerator(generator.Generator):
         
         # Individual send without callback
         method = gen.Method('void', f'send_{program_name}', [
-            gen.Variable('Client*', 'client'),
+            gen.Variable('client*', 'client'),
             gen.Variable(f'{message_name}&&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
         methods.append(method)
 
-        method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name})'))
+        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name})'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)'))
+        method.append(gen.Statement(f'::kumo::detail::send_{queue}(client, packet)'))
 
         # Individual with callback
         method = gen.Method('void', f'send_{program_name}', [
-            gen.Variable('Client*', 'client'),
+            gen.Variable('client*', 'client'),
             gen.Variable(f'{message_name}&&', 'data'),
             gen.Variable('T&&', 'callback')
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename T>', ending=''))
         methods.append(method)
 
-        method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name}, std::forward<T>(callback))'))
+        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)'))
+        method.append(gen.Statement(f'::kumo::detail::send_{queue}(client, packet)'))
 
         # Global broadcast send without callback
         method = gen.Method('void', f'broadcast_{program_name}', [
-            gen.Variable('broadcaster<B>*', 'broadcaster'),
+            gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data')
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
         methods.append(method)
 
-        method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name})'))
+        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name})'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
         method.append(gen.Statement(f'broadcaster->broadcast([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)')], True))
+        method.append(gen.Scope([gen.Statement(f'::kumo::detail::send_{queue}(client, packet)')], True))
         method.append(gen.Statement(f'}})'))
 
         # Global broadcast with callback
         method = gen.Method('void', f'broadcast_{program_name}', [
-            gen.Variable('broadcaster<B>*', 'broadcaster'),
+            gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data'),
             gen.Variable('T&&', 'callback')
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
         methods.append(method)
 
-        method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name}, std::forward<T>(callback))'))
+        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
         method.append(gen.Statement(f'broadcaster->broadcast([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)')], True))
+        method.append(gen.Scope([gen.Statement(f'::kumo::detail::send_{queue}(client, packet)')], True))
         method.append(gen.Statement(f'}})'))
 
         # Global broadcast send without callback
         method = gen.Method('void', f'broadcast_single_{program_name}', [
-            gen.Variable('broadcaster<B>*', 'broadcaster'),
+            gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data')
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
         methods.append(method)
 
-        method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name})'))
+        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name})'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
         method.append(gen.Statement(f'broadcaster->broadcast_single([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)')], True))
+        method.append(gen.Scope([gen.Statement(f'::kumo::detail::send_{queue}(client, packet)')], True))
         method.append(gen.Statement(f'}})'))
 
         # Global broadcast with callback
         method = gen.Method('void', f'broadcast_single_{program_name}', [
-            gen.Variable('broadcaster<B>*', 'broadcaster'),
+            gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
             gen.Variable(f'{message_name}&&', 'data'),
             gen.Variable('T&&', 'callback')
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
         methods.append(method)
 
-        method.append(gen.Statement(f'Packet::Ptr packet = Packet::make(opcode::{program_name}, std::forward<T>(callback))'))
+        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
         method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
         method.append(gen.Statement(f'broadcaster->broadcast_single([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'::kaminari::detail::send_{queue}(client, packet)')], True))
+        method.append(gen.Scope([gen.Statement(f'::kumo::detail::send_{queue}(client, packet)')], True))
         method.append(gen.Statement(f'}})'))
         
         for method in methods:
@@ -350,7 +386,7 @@ class LangGenerator(generator.Generator):
         message_name = args[0]
 
         method = gen.Method('bool', f'handle_{program_name}', [
-            gen.Variable('packet_reader*', 'packet'),
+            gen.Variable('::kaminari::packet_reader*', 'packet'),
             gen.Variable('client*', 'client')
         ])
 
@@ -387,7 +423,7 @@ class LangGenerator(generator.Generator):
         for queue in self.queues.keys():
             method = gen.Method('void', f'send_{queue}', [
                 gen.Variable('client*', 'client'),
-                gen.Variable('const packet::ptr&', 'packet')
+                gen.Variable('const ::kaminari::packet::ptr&', 'packet')
             ], visibility=gen.Visibility.PUBLIC)
             method.append(gen.Statement(f'client->send_{queue}(packet)'))
             details_methods.append(method)
@@ -398,14 +434,15 @@ class LangGenerator(generator.Generator):
         ]))
 
         # Trivial types size
-        for dtype, ctype in TYPE_CONVERSION.items():
+        for dtype in semantic.TRIVIAL_TYPES:
+            ctype = TYPE_CONVERSION[dtype]
             method = gen.Method('uint8_t', f'sizeof_{dtype}', decl_modifiers=['inline'])
             method.append(gen.Statement(f'return static_cast<uint8_t>(sizeof({ctype}))'))
             self.marshall_file.add(method)
 
         # General packet handler
         method = gen.Method('bool', 'handle_packet', [
-            gen.Variable('packet_reader*', 'packet'),
+            gen.Variable('::kaminari::packet_reader*', 'packet'),
             gen.Variable('client*', 'client')
         ])
 
@@ -420,32 +457,88 @@ class LangGenerator(generator.Generator):
         ]))
 
         self.marshall_file.add(method)
-        
+
+        # Opcodes enum
+        opcodes = gen.Scope([
+            gen.Statement('enum class opcode', ending=''),
+            gen.Block([
+                gen.Statement(f'{name: <16} = 0x{self.opcodes[name]},', ending='') for name in \
+                    (program.name.eval() for program in self.programs.values())
+            ], ending=';')
+        ])
+        self.opcodes_file.add(opcodes)
+
         
     def dump(self, path, include_path):
+        def kaminari_fwd(code):
+            if not isinstance(code, list):
+                code = [code]
+
+            return gen.Scope([
+                gen.Statement('namespace kaminari', ending=''),
+                gen.Block(code)
+            ])
+
+        def packet_fwd():
+            return kaminari_fwd([
+                gen.Statement('class packet', ending=''),
+                gen.Block([
+                    gen.Statement('public:', ending=''),
+                    gen.Statement('using ptr = boost::intrusive_ptr<packet>')
+                ], ending=';')
+            ])
+
         with open(f'{path}/marshall.hpp', 'w') as fp:
-            fp.write(self.marshall_file.header())
+            fp.write(self.marshall_file.header([
+                gen.Statement(f'#include <inttypes.h>', ending=''),
+                gen.Statement(f'#include "{include_path}/structs.hpp"', ending=''),
+                gen.Statement('class client'),
+                kaminari_fwd(gen.Statement('class packet_reader')),
+                packet_fwd()
+            ]))
 
         with open(f'{path}/marshall.cpp', 'w') as fp:
-            fp.write(self.marshall_file.source())
+            fp.write(self.marshall_file.source([
+                gen.Statement(f'#include "{include_path}/opcodes.hpp"', ending=''),
+                gen.Statement(f'#include "{include_path}/marshall.hpp"', ending=''),
+                gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
+            ]))
 
         with open(f'{path}/rpc.hpp', 'w') as fp:
             fp.write(self.rpc_file.header([
+                gen.Statement(f'#include "{include_path}/opcodes.hpp"', ending=''),
                 gen.Statement(f'#include "{include_path}/rpc_detail.hpp"', ending=''),
+                gen.Statement(f'#include "{include_path}/structs.hpp"', ending=''),
+                gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/broadcaster.hpp>', ending=''),
                 gen.Statement('class client'),
-                gen.Statement('template <typename B> class broadcaster')
             ]))
 
         with open(f'{path}/rpc.cpp', 'w') as fp:
             fp.write(self.rpc_file.source([
-                gen.Statement(f'#include "{include_path}/rpc.hpp"', ending='')
+                gen.Statement(f'#include "{include_path}/marshall.hpp"', ending=''),
+                gen.Statement(f'#include "{include_path}/rpc.hpp"', ending=''),
             ]))
 
         with open(f'{path}/rpc_detail.hpp', 'w') as fp:
-            fp.write(self.rpc_detail_file.header())
+            fp.write(self.rpc_detail_file.header([
+                gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
+                gen.Statement('class client'),
+                packet_fwd()
+            ]))
 
         with open(f'{path}/rpc_detail.cpp', 'w') as fp:
-            fp.write(self.rpc_detail_file.source())
+            fp.write(self.rpc_detail_file.source([
+                gen.Statement(f'#include "{include_path}/rpc_detail.hpp"', ending=''),
+            ]))
 
+        with open(f'{path}/structs.hpp', 'w') as fp:
+            fp.write(self.structs_file.header([
+                gen.Statement(f'#include <optional>', ending=''),
+                gen.Statement(f'#include <vector>', ending=''),
+                gen.Statement(f'#include <inttypes.h>', ending='')
+            ]))
 
-        # self.opcodes_file = File(namespace='kaminari')
+        with open(f'{path}/opcodes.hpp', 'w') as fp:
+            fp.write(self.opcodes_file.source())

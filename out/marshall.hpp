@@ -1,11 +1,26 @@
+#include <inttypes.h>
+#include "out/structs.hpp"
+class client;
 namespace kaminari
 {
-    void pack_complex(const Packet::Ptr& packet, const complex& data);
+    class packet_reader;
+}
+namespace kaminari
+{
+    class packet
+    {
+        public:
+        using ptr = boost::intrusive_ptr<packet>;
+    };
+}
+namespace kumo
+{
+    void pack_complex(const ::kaminari::packet::ptr& packet, const complex& data);
     uint8_t packet_size(const complex& data);
-    void pack_spawn_data(const Packet::Ptr& packet, const spawn_data& data);
+    void pack_spawn_data(const ::kaminari::packet::ptr& packet, const spawn_data& data);
     uint8_t packet_size(const spawn_data& data);
     uint8_t sizeof_spawn_data();
-    bool unpack_movement(packet_reader* packet, movement& data);
+    bool unpack_movement(::kaminari::packet_reader* packet, movement& data);
     uint8_t packet_size(const movement& data);
     uint8_t sizeof_movement();
     inline uint8_t sizeof_int8();
@@ -19,10 +34,10 @@ namespace kaminari
     inline uint8_t sizeof_float();
     inline uint8_t sizeof_double();
     inline uint8_t sizeof_bool();
-    bool handle_packet(packet_reader* packet, client* client);
+    bool handle_packet(::kaminari::packet_reader* packet, client* client);
 }
 
-namespace kaminari
+namespace kumo
 {
     inline uint8_t sizeof_int8()
     {

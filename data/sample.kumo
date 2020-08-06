@@ -1,6 +1,10 @@
-message spawn_data
+message has_id
 {
 	int64 id;
+}
+
+message spawn_data : has_id
+{
 	int8 x;
 	int8 y;
 }

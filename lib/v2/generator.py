@@ -18,6 +18,7 @@ class Generator(object):
 
         # Generated data
         self.opcodes = {}
+        self.structures = {}
         self.message_packer = {}
         self.message_unpacker = {}
         self.message_size = {}
@@ -26,6 +27,9 @@ class Generator(object):
         self.send_list = []
 
     # To be implemented by specific language generators
+    def _generate_structure(self, message):
+        raise NotImplementedError()
+
     def _generate_message_packer(self, message):
         raise NotImplementedError()
 
@@ -73,6 +77,26 @@ class Generator(object):
 
     def is_message(self, dtype):
         return dtype in self.messages
+
+    def message_fields_including_base(self, message):
+        fields = message.fields.eval()
+
+        if message.base.name is not None:
+            return self.message_fields_including_base(self.messages[message.base.name.eval()]) + fields
+
+        return fields
+
+    def generate_structure(self, message):
+        message_name = message.name.eval()
+        if message_name in self.structures:
+            return self.structures[message_name]
+
+        if message.base.name is not None:
+            self.generate_structure(self.messages[message.base.name.eval()])
+        
+        struct = self._generate_structure(message)
+        self.structures[message_name] = struct
+        return struct
     
     def generate_message_packer(self, message):
         message_name = message.name.eval()
@@ -118,6 +142,7 @@ class Generator(object):
             (direction == Direction.S2C and self.role == Role.SERVER) or \
             (direction == Direction.C2S and self.role == Role.CLIENT):
 
+            self.generate_structure(message)
             self.generate_message_packer(message)
             self._generate_program_send(program)
             self.send_list.append(program_name)
@@ -126,6 +151,7 @@ class Generator(object):
             (direction == Direction.C2S and self.role == Role.SERVER) or \
             (direction == Direction.S2C and self.role == Role.CLIENT):
             
+            self.generate_structure(message)
             self.generate_message_unpacker(message)
             self._generate_program_recv(program)
             self.recv_list.append(program_name)
