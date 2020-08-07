@@ -1,8 +1,6 @@
 from rply.token import BaseBox
 from enum import Enum
 
-from .custom_cgen import *
-
 
 class Direction(Enum):
     S2C = 0
@@ -135,8 +133,6 @@ class QueueSubtype(BaseBox):
     def __init__(self, subtype, argument=None):
         self.subtype = subtype
         self.argument = argument
-
-PACKERS_WITHOUT_BARE = ('most_recent_packer_with_id', 'most_recent_packer_by_opcode')
 
 class QueueSpecifierBox(BaseBox):
     def __init__(self, queue_type, args):
