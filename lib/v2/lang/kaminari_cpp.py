@@ -91,7 +91,7 @@ class LangGenerator(generator.Generator):
     def __write_value(self, dtype, variable):
         # It seems to be a message type
         if self.is_message(dtype):
-            return gen.Statement(f'pack_{dtype}(packet, {variable})')
+            return gen.Statement(f'pack(packet, {variable})')
         else:
             return gen.Statement(f'*packet << {variable}')
 
@@ -122,7 +122,7 @@ class LangGenerator(generator.Generator):
                     ]),
                     gen.Statement(f'for (int i = 0; i < size; ++i)', ending=''),
                     gen.Block([
-                        gen.Statement(f'({variable}).push_back(packet->read<{inner}>())')
+                        gen.Statement(f'({variable}).push_back(packet->read<{TYPE_CONVERSION[inner]}>())')
                     ])
                 ])
             else:
@@ -131,7 +131,7 @@ class LangGenerator(generator.Generator):
                     gen.Statement(f'for (int i = 0; i < size; ++i)', ending=''),
                     gen.Block([
                         gen.Statement(f'{inner} data'),
-                        gen.Statement(f'if (unpack_{inner}(packet, data)', ending=''),
+                        gen.Statement(f'if (unpack(packet, data)', ending=''),
                         gen.Block([
                             gen.Statement(f'({variable}).push_back(std::move(data))')
                         ])
@@ -139,7 +139,7 @@ class LangGenerator(generator.Generator):
                 ])
 
         if self.is_message(dtype):
-            return gen.Statement(f'unpack_{dtype}(packet, data)')
+            return gen.Statement(f'unpack(packet, data)')
 
         return gen.Statement(f'{variable} = packet->read<{dtype}>()')
 
@@ -305,14 +305,14 @@ class LangGenerator(generator.Generator):
                 gen.Variable(f'{message_name}&&', 'data'),
                 gen.Variable('T&&', 'callback')
             ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
-            method.append(gen.Statement(f'pq->send_{queue}(opcode::{program_name}, std::move(data), std::forward<T>(callback))'))
+            method.append(gen.Statement(f'pq->send_{queue}(static_cast<uint16_t>(opcode::{program_name}), std::move(data), std::forward<T>(callback))'))
             methods.append(method)
         else:
             method = gen.Method('void', f'send_{program_name}', [
                 gen.Variable('::kumo::protocol_queues*', 'pq'),
                 gen.Variable(f'{message_name}&&', 'data')
             ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
-            method.append(gen.Statement(f'pq->send_{queue}(opcode::{program_name}, std::move(data))'))
+            method.append(gen.Statement(f'pq->send_{queue}(static_cast<uint16_t>(opcode::{program_name}), std::move(data))'))
             methods.append(method)
         
         # There are two types of broadcasts, one that implies neighbouring areas
@@ -328,7 +328,7 @@ class LangGenerator(generator.Generator):
                     ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
                     methods.append(method)
 
-                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
+                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(static_cast<uint16_t>(opcode::{program_name}), std::forward<T>(callback))'))
                     method.append(gen.Statement(f'::kumo::pack(packet, data)'))
                     method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
@@ -340,7 +340,7 @@ class LangGenerator(generator.Generator):
                     ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
                     methods.append(method)
 
-                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(opcode::{program_name})'))
+                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(static_cast<uint16_t>(opcode::{program_name}))'))
                     method.append(gen.Statement(f'::kumo::pack(packet, data)'))
                     method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
@@ -358,7 +358,7 @@ class LangGenerator(generator.Generator):
                 method.append(gen.Statement(f'broadcaster->broadcast([data = std::move(data)](auto pq) {{', ending=''))
                 method.append(gen.Scope([
                     # Do not move data here, we need it further down in subsequent calls
-                    gen.Statement(f'pq->send_{queue}(opcode::{program_name}, data)')
+                    gen.Statement(f'pq->send_{queue}(static_cast<uint16_t>(opcode::{program_name}), data)')
                     ], indent=True)
                 )
                 method.append(gen.Statement(f'}})'))
@@ -390,11 +390,11 @@ class LangGenerator(generator.Generator):
 
             method.append(gen.Statement(f'if (client->{attr}() != {attr}::{value})', ending=''))
             method.append(gen.Block([
-                gen.Statement(f'return {false_case}(packet->opcode(), client->{attr}(), {attr}::{value})')
+                gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()), client->{attr}(), {attr}::{value})')
             ]))
         
         method.append(gen.Statement(f'const {message_name} data'))
-        method.append(gen.Statement(f'if (!unpack_{message_name}(packet, data)', ending=''))
+        method.append(gen.Statement(f'if (!unpack(packet, data)', ending=''))
         method.append(gen.Block([
             gen.Statement('return false')
         ]))
@@ -435,7 +435,7 @@ class LangGenerator(generator.Generator):
             gen.Variable('client*', 'client')
         ])
 
-        method.append(gen.Statement('switch (packet->opcode())', ending=''))
+        method.append(gen.Statement('switch (static_cast<::kumo::opcode>(packet->opcode()))', ending=''))
         method.append(gen.Block([
             gen.Scope([
                 gen.Statement(f'case opcode::{program.name.eval()}:', ending=''),
@@ -605,6 +605,7 @@ class LangGenerator(generator.Generator):
             fp.write(self.queues_file.header([
                 gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
+                gen.Statement(f'#include <map>', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 kaminari_fwd(gen.Statement('class packet')),
