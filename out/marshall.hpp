@@ -15,12 +15,12 @@ namespace kaminari
 }
 namespace kumo
 {
-    void pack_complex(const ::kaminari::packet::ptr& packet, const complex& data);
+    void pack(const ::kaminari::packet::ptr& packet, const complex& data);
     uint8_t packet_size(const complex& data);
-    void pack_spawn_data(const ::kaminari::packet::ptr& packet, const spawn_data& data);
+    void pack(const ::kaminari::packet::ptr& packet, const spawn_data& data);
     uint8_t packet_size(const spawn_data& data);
     uint8_t sizeof_spawn_data();
-    bool unpack_movement(::kaminari::packet_reader* packet, movement& data);
+    bool unpack(::kaminari::packet_reader* packet, movement& data);
     uint8_t packet_size(const movement& data);
     uint8_t sizeof_movement();
     inline uint8_t sizeof_int8();

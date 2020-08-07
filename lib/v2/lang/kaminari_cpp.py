@@ -68,6 +68,7 @@ class LangGenerator(generator.Generator):
         self.rpc_file = File(namespace='kumo')
         self.rpc_detail_file = File(namespace='kumo')
         self.structs_file = File(namespace='kumo')
+        self.queues_file = File(namespace='kumo')
 
     def __is_trivial(self, message: boxes.MessageBox):
         for decl in self.message_fields_including_base(message):
@@ -203,7 +204,7 @@ class LangGenerator(generator.Generator):
     def _generate_message_packer(self, message: boxes.MessageBox):
         message_name = message.name.eval()
 
-        method = gen.Method('void', f'pack_{message_name}', [
+        method = gen.Method('void', f'pack', [
             gen.Variable('const ::kaminari::packet::ptr&', 'packet'),
             gen.Variable(f'const {message_name}&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
@@ -226,7 +227,7 @@ class LangGenerator(generator.Generator):
     def _generate_message_unpacker(self, message: boxes.MessageBox):
         message_name = message.name.eval()
 
-        method = gen.Method('bool', f'unpack_{message_name}', [
+        method = gen.Method('bool', f'unpack', [
             gen.Variable('::kaminari::packet_reader*', 'packet'),
             gen.Variable(f'{message_name}&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
@@ -296,84 +297,72 @@ class LangGenerator(generator.Generator):
 
         # Returned methods
         methods = []
+    
+        # In C++ the callback case also covers the case where users do not want one
+        if self.can_queue_have_callback(self.queues[queue]):
+            method = gen.Method('void', f'send_{program_name}', [
+                gen.Variable('::kumo::protocol_queues*', 'pq'),
+                gen.Variable(f'{message_name}&&', 'data'),
+                gen.Variable('T&&', 'callback')
+            ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
+            method.append(gen.Statement(f'pq->send_{queue}(opcode::{program_name}, std::move(data), std::forward<T>(callback))'))
+            methods.append(method)
+        else:
+            method = gen.Method('void', f'send_{program_name}', [
+                gen.Variable('::kumo::protocol_queues*', 'pq'),
+                gen.Variable(f'{message_name}&&', 'data')
+            ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
+            method.append(gen.Statement(f'pq->send_{queue}(opcode::{program_name}, std::move(data))'))
+            methods.append(method)
         
-        # Individual send without callback
-        method = gen.Method('void', f'send_{program_name}', [
-            gen.Variable('client*', 'client'),
-            gen.Variable(f'{message_name}&&', 'data')
-        ], visibility=gen.Visibility.PUBLIC)
-        methods.append(method)
+        # There are two types of broadcasts, one that implies neighbouring areas
+        # and one that doesn't, generate both
+        for suffix in ('', '_single'):
+            if self.has_queue_packed_add(self.queues[queue]):
+                
+                if self.can_queue_have_callback(self.queues[queue]):
+                    method = gen.Method('void', f'broadcast_{program_name}{suffix}', [
+                        gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
+                        gen.Variable(f'{message_name}&&', 'data'),
+                        gen.Variable('T&&', 'callback')
+                    ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
+                    methods.append(method)
 
-        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name})'))
-        method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'::kumo::detail::send_{queue}(client, packet)'))
+                    method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
+                    method.append(gen.Statement(f'::kumo::pack(packet, data)'))
+                    method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
+                    method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
+                    method.append(gen.Statement(f'}})'))
+                else:
+                    method = gen.Method('void', f'broadcast_{program_name}{suffix}', [
+                        gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
+                        gen.Variable(f'{message_name}&&', 'data')
+                    ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
+                    methods.append(method)
 
-        # Individual with callback
-        method = gen.Method('void', f'send_{program_name}', [
-            gen.Variable('client*', 'client'),
-            gen.Variable(f'{message_name}&&', 'data'),
-            gen.Variable('T&&', 'callback')
-        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename T>', ending=''))
-        methods.append(method)
+                    method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name})'))
+                    method.append(gen.Statement(f'::kumo::pack(packet, data)'))
+                    method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
+                    method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
+                    method.append(gen.Statement(f'}})'))
 
-        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
-        method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'::kumo::detail::send_{queue}(client, packet)'))
+            else:
+                # Adding by bare data is always available
+                # But we can not have callbacks YET
+                method = gen.Method('void', f'broadcast_{program_name}{suffix}', [
+                    gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
+                    gen.Variable(f'{message_name}&&', 'data')
+                ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
+                methods.append(method)
 
-        # Global broadcast send without callback
-        method = gen.Method('void', f'broadcast_{program_name}', [
-            gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
-            gen.Variable(f'{message_name}&&', 'data')
-        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
-        methods.append(method)
-
-        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name})'))
-        method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'broadcaster->broadcast([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'::kumo::detail::send_{queue}(client, packet)')], True))
-        method.append(gen.Statement(f'}})'))
-
-        # Global broadcast with callback
-        method = gen.Method('void', f'broadcast_{program_name}', [
-            gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
-            gen.Variable(f'{message_name}&&', 'data'),
-            gen.Variable('T&&', 'callback')
-        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
-        methods.append(method)
-
-        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
-        method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'broadcaster->broadcast([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'::kumo::detail::send_{queue}(client, packet)')], True))
-        method.append(gen.Statement(f'}})'))
-
-        # Global broadcast send without callback
-        method = gen.Method('void', f'broadcast_single_{program_name}', [
-            gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
-            gen.Variable(f'{message_name}&&', 'data')
-        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
-        methods.append(method)
-
-        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name})'))
-        method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'broadcaster->broadcast_single([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'::kumo::detail::send_{queue}(client, packet)')], True))
-        method.append(gen.Statement(f'}})'))
-
-        # Global broadcast with callback
-        method = gen.Method('void', f'broadcast_single_{program_name}', [
-            gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
-            gen.Variable(f'{message_name}&&', 'data'),
-            gen.Variable('T&&', 'callback')
-        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
-        methods.append(method)
-
-        method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
-        method.append(gen.Statement(f'pack_{message_name}(packet, data)'))
-        method.append(gen.Statement(f'broadcaster->broadcast_single([packet](auto client) {{', ending=''))
-        method.append(gen.Scope([gen.Statement(f'::kumo::detail::send_{queue}(client, packet)')], True))
-        method.append(gen.Statement(f'}})'))
-        
+                method.append(gen.Statement(f'broadcaster->broadcast([data = std::move(data)](auto pq) {{', ending=''))
+                method.append(gen.Scope([
+                    # Do not move data here, we need it further down in subsequent calls
+                    gen.Statement(f'pq->send_{queue}(opcode::{program_name}, data)')
+                    ], indent=True)
+                )
+                method.append(gen.Statement(f'}})'))
+            
         for method in methods:
             self.rpc_file.add(method)
 
@@ -418,20 +407,20 @@ class LangGenerator(generator.Generator):
 
     def _generate_internals(self):
         # Per queue internal send to hide implementation details
-        details_methods = []
+        # details_methods = []
 
-        for queue in self.queues.keys():
-            method = gen.Method('void', f'send_{queue}', [
-                gen.Variable('client*', 'client'),
-                gen.Variable('const ::kaminari::packet::ptr&', 'packet')
-            ], visibility=gen.Visibility.PUBLIC)
-            method.append(gen.Statement(f'client->send_{queue}(packet)'))
-            details_methods.append(method)
+        # for queue in self.queues.keys():
+        #     method = gen.Method('void', f'send_{queue}', [
+        #         gen.Variable('client*', 'client'),
+        #         gen.Variable('const ::kaminari::packet::ptr&', 'packet')
+        #     ], visibility=gen.Visibility.PUBLIC)
+        #     method.append(gen.Statement(f'client->send_{queue}(packet)'))
+        #     details_methods.append(method)
 
-        self.rpc_detail_file.add(gen.Scope([
-            gen.Statement('namespace detail', ending=''),
-            gen.Block(details_methods)
-        ]))
+        # self.rpc_detail_file.add(gen.Scope([
+        #     gen.Statement('namespace detail', ending=''),
+        #     gen.Block(details_methods)
+        # ]))
 
         # Trivial types size
         for dtype in semantic.TRIVIAL_TYPES:
@@ -468,6 +457,77 @@ class LangGenerator(generator.Generator):
         ])
         self.opcodes_file.add(opcodes)
 
+        # Protocol queues
+        queues = gen.Class('protocol_queues', cpp_style=True)
+        self.queues_file.add(queues)
+        
+        reset = gen.Method('void', 'reset')
+        reset.append(gen.Scope([
+            gen.Statement(f'_{queue}.reset()') for queue in self.queues.keys()
+        ]))
+        queues.methods.append(reset)
+
+        ack = gen.Method('void', 'ack', [gen.Variable('uint16_t', 'block_id')])
+        ack.append(gen.Scope([
+            gen.Statement(f'_{queue}.ack(block_id)') for queue in self.queues.keys()
+        ]))
+        queues.methods.append(ack)
+
+        process = gen.Method('void', 'process', [
+            gen.Variable('uint16_t', 'id'),
+            gen.Variable('uint16_t&', 'remaining'),
+            gen.Variable('typename ::kumo::detail::packets_by_block&', 'by_block')
+        ])
+        process.append(gen.Scope([
+            gen.Statement(f'_{queue}.process(block_id, remaining, by_block)') for queue in self.queues.keys()
+        ]))
+        queues.methods.append(process)
+
+        for queue_name, queue in self.queues.items():
+            # Attribute
+            queue_base = queue.base.subtype.eval()
+            queue_packer = 'immediate_packer'
+            queue_packer_template = ''
+            if queue.specifier.queue_type == boxes.QueueSpecifierType.SPECIALIZED:
+                queue_packer = queue.specifier.args.eval()
+
+            elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
+                queue_packer = 'unique_merge_packer'
+                args = queue.specifier.args
+                queue_packer_template = f'<{args[0].eval()}, {args[1].eval()}, {args[2].eval()}>'
+
+            queue_packer = queue_packer + queue_packer_template
+            if queue.base.argument is not None:
+                queue_packer = f'{queue_packer}, {queue.base.argument.eval()}'
+
+            queues.attributes.append(gen.Attribute(
+                f'::kaminari::{queue_base}<::kaminari::{queue_packer}>',
+                f'_{queue_name}'
+            ))
+
+            # General send with data
+            if self.can_queue_have_callback(queue):
+                send = gen.Method('void', f'send_{queue_name}', [
+                    gen.Variable('::kumo::opcode', 'opcode'),
+                    gen.Variable(f'D&&', 'data'),
+                    gen.Variable('T&&', 'callback')
+                ], template=gen.Statement('template <typename D, typename T>', ending=''))
+                send.append(gen.Statement(f'_{queue_name}.add(opcode, std::forward<D>(data), std::forward<T>(callback))'))
+            else:
+                send = gen.Method('void', f'send_{queue_name}', [
+                    gen.Variable('::kumo::opcode', 'opcode'),
+                    gen.Variable(f'D&&', 'data')
+                ], template=gen.Statement('template <typename D>', ending=''))
+                send.append(gen.Statement(f'_{queue_name}.add(opcode, std::forward<D>(data))'))
+
+            queues.methods.append(send)
+
+            if self.has_queue_packed_add(queue):
+                send = gen.Method('void', f'send_{queue_name}', [
+                    gen.Variable('const typename ::kaminari::packet::ptr&', 'packet')
+                ])
+                send.append(gen.Statement(f'_{queue_name}.add(packet)'))
+                queues.methods.append(send)
         
     def dump(self, path, include_path):
         def kaminari_fwd(code):
@@ -542,3 +602,22 @@ class LangGenerator(generator.Generator):
 
         with open(f'{path}/opcodes.hpp', 'w') as fp:
             fp.write(self.opcodes_file.source())
+
+        with open(f'{path}/protocol_queues.hpp', 'w') as fp:
+            fp.write(self.queues_file.header([
+                gen.Statement(f'#include <inttypes.h>', ending=''),
+                gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
+                packet_fwd(),
+                kaminari_fwd([
+                    gen.Statement('namespace detail', ending=''),
+                    gen.Block([
+                        gen.Statement('using packets_by_block = std::map<uint32_t, std::vector<Packet::Ptr>>')
+                    ])
+                ])
+            ]))
+            
+        with open(f'{path}/protocol_queues.cpp', 'w') as fp:
+            fp.write(self.queues_file.source([
+                gen.Statement(f'#include <{include_path}/protocol_queues.hpp>', ending=''),
+            ]))
+            

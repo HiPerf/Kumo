@@ -10,16 +10,8 @@ namespace kaminari
 }
 namespace kumo
 {
-    namespace detail
-    {
-        void send_reliable(client* client, const ::kaminari::packet::ptr& packet);
-        void send_ordered(client* client, const ::kaminari::packet::ptr& packet);
-    }
 }
 
 namespace kumo
 {
-    namespace detail
-    {
-    }
 }

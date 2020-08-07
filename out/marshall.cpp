@@ -4,7 +4,7 @@
 #include <kaminari/buffers/packet_reader.hpp>
 namespace kumo
 {
-    void pack_complex(const ::kaminari::packet::ptr& packet, const complex& data)
+    void pack(const ::kaminari::packet::ptr& packet, const complex& data)
     {
         *packet << static_cast<bool>(data.x);
         if (static_cast<bool>(data.x))
@@ -43,7 +43,7 @@ namespace kumo
             size += sizeof(uint8_t) + (*data.w).size() * sizeof_bool();
         }
     }
-    void pack_spawn_data(const ::kaminari::packet::ptr& packet, const spawn_data& data)
+    void pack(const ::kaminari::packet::ptr& packet, const spawn_data& data)
     {
         *packet << data.id;
         *packet << data.x;
@@ -58,7 +58,7 @@ namespace kumo
     {
         return sizeof(spawn_data);
     }
-    bool unpack_movement(::kaminari::packet_reader* packet, movement& data)
+    bool unpack(::kaminari::packet_reader* packet, movement& data)
     {
         data.direction = packet->read<int8>();
     }

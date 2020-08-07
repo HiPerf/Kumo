@@ -1,7 +1,7 @@
 import hashlib
 from enum import Enum
 
-from .boxes import Direction
+from .boxes import Direction, QueueSpecifierType
 
 
 class Role(Enum):
@@ -86,6 +86,29 @@ class Generator(object):
 
         return fields
 
+    def can_queue_have_callback(self, queue):
+        # Standard queues are IMMEDIATE packers, which means they can have callbacks
+        if queue.specifier.queue_type == QueueSpecifierType.STANDARD:
+            return True
+
+        if queue.specifier.queue_type == QueueSpecifierType.SPECIALIZED:
+            packer = queue.specifier.args.eval()
+            return packer in ('immediate_packer', 'ordered_packer', 'most_recent_packer_by_opcode',
+                'most_recent_packer_by_id')
+            
+        return False
+        
+    def has_queue_packed_add(self, queue):
+        # Standard queues are IMMEDIATE packers, which means they can have callbacks
+        if queue.specifier.queue_type == QueueSpecifierType.STANDARD:
+            return True
+
+        if queue.specifier.queue_type == QueueSpecifierType.SPECIALIZED:
+            packer = queue.specifier.args.eval()
+            return packer in ('immediate_packer', 'ordered_packer')
+
+        return False
+
     def generate_structure(self, message):
         message_name = message.name.eval()
         if message_name in self.structures:
@@ -129,7 +152,7 @@ class Generator(object):
         program_name = program.name.eval()
 
         # Get an opcode for the RPC
-        opcode = self.get_opcode(program_name)
+        self.get_opcode(program_name)
 
         # Message packer/unpacker according to direction
         direction = program.direction.eval()

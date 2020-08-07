@@ -1,5 +1,4 @@
 from rply.token import BaseBox
-import cgen as c
 from enum import Enum
 
 from .custom_cgen import *
@@ -143,17 +142,6 @@ class QueueSpecifierBox(BaseBox):
     def __init__(self, queue_type, args):
         self.queue_type = queue_type
         self.args = args
-
-    def has_bare_send(self):
-        return self.queue_type == QueueSpecifierType.STANDARD or \
-            (self.queue_type == QueueSpecifierType.SPECIALIZED and self.args.eval() not in PACKERS_WITHOUT_BARE) or \
-            self.queue_type == QueueSpecifierType.ARRAY
-
-    def has_callback(self):
-        return self.queue_type in (
-                QueueSpecifierType.STANDARD,
-                QueueSpecifierType.SPECIALIZED,
-                QueueSpecifierType.ARRAY)
 
 class ArgumentBox(BaseBox):
     def __init__(self, arg, args=None):

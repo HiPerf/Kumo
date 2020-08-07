@@ -43,6 +43,8 @@ def check_queue_specifier(name, queue, messages, programs):
         assert gtype in messages, f'Queue `{name}` specifies incorrect global message `{gtype}`'
         assert dtype in messages, f'Queue `{name}` specifies incorrect detail message `{dtype}`'
         assert program in programs, f'Queue `{name}` specifies incorrect program `{program}`'
+    elif queue_type == boxes.QueueSpecifierType.ARRAY:
+        raise NotImplementedError("Array definitions are deprecated")
 
 def check_message_types(name, message, messages):
     for decl in message.fields.eval():
