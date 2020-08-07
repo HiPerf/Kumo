@@ -34,8 +34,8 @@ namespace kumo
         void send_ordered(::kumo::opcode opcode, D&& data, T&& callback);
         void send_ordered(const boost::intrusive_ptr<::kaminari::packet>& packet);
     private:
-        ::kaminari::reliable_queue<::kaminari::immediate_packer> _reliable;
-        ::kaminari::reliable_queue<::kaminari::ordered_packer> _ordered;
+        ::kaminari::reliable_queue<::kaminari::immediate_packer<::kumo::marshal>> _reliable;
+        ::kaminari::reliable_queue<::kaminari::ordered_packer<::kumo::marshal>> _ordered;
     };
 
     template <typename D, typename T>

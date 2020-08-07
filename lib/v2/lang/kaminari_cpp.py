@@ -496,14 +496,14 @@ class LangGenerator(generator.Generator):
             # Attribute
             queue_base = queue.base.subtype.eval()
             queue_packer = 'immediate_packer'
-            queue_packer_template = ''
+            queue_packer_template = '<::kumo::marshal>'
             if queue.specifier.queue_type == boxes.QueueSpecifierType.SPECIALIZED:
                 queue_packer = queue.specifier.args.eval()
 
             elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
                 queue_packer = 'unique_merge_packer'
                 args = queue.specifier.args
-                queue_packer_template = f'<{args[0].eval()}, {args[1].eval()}, {args[2].eval()}>'
+                queue_packer_template = f'<{args[0].eval()}, {args[1].eval()}, {args[2].eval()}, ::kumo::marshal>'
 
             queue_packer = queue_packer + queue_packer_template
             if queue.base.argument is not None:
