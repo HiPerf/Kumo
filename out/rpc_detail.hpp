@@ -1,3 +1,4 @@
+#pragma once
 #include <boost/intrusive_ptr.hpp>
 class client;
 namespace kaminari

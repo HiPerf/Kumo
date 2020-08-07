@@ -1,3 +1,4 @@
+#pragma once
 namespace kumo
 {
     enum class opcode

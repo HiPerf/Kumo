@@ -1,3 +1,4 @@
+#pragma once
 #include <kumo/opcodes.hpp>
 #include <kumo/rpc_detail.hpp>
 #include <kumo/structs.hpp>

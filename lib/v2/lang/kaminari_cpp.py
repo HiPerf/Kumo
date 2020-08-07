@@ -63,7 +63,7 @@ class LangGenerator(generator.Generator):
         self.handler_programs = set()
 
         # Output code
-        self.marshall_file = File(namespace='kumo')
+        self.marshal_file = File(namespace='kumo')
         self.opcodes_file = File(namespace='kumo')
         self.rpc_file = File(namespace='kumo')
         self.rpc_detail_file = File(namespace='kumo')
@@ -221,7 +221,7 @@ class LangGenerator(generator.Generator):
             else:
                 method.append(self.__write_type(decl, f'data.{name}'))
 
-        self.marshall_file.add(method)
+        self.marshal_file.add(method)
         return [method]
 
     def _generate_message_unpacker(self, message: boxes.MessageBox):
@@ -248,7 +248,7 @@ class LangGenerator(generator.Generator):
             else:
                 method.append(self.__read_type(decl, f'data.{name}'))
 
-        self.marshall_file.add(method)
+        self.marshal_file.add(method)
         return method
 
     def _generate_message_size(self, message: boxes.MessageBox):
@@ -284,7 +284,7 @@ class LangGenerator(generator.Generator):
                     method.append(self.__write_size(decl, f'data.{name}'))
 
         for method in methods:
-            self.marshall_file.add(method)
+            self.marshal_file.add(method)
 
         return methods
 
@@ -427,7 +427,7 @@ class LangGenerator(generator.Generator):
             ctype = TYPE_CONVERSION[dtype]
             method = gen.Method('uint8_t', f'sizeof_{dtype}', decl_modifiers=['inline'])
             method.append(gen.Statement(f'return static_cast<uint8_t>(sizeof({ctype}))'))
-            self.marshall_file.add(method)
+            self.marshal_file.add(method)
 
         # General packet handler
         method = gen.Method('bool', 'handle_packet', [
@@ -445,7 +445,7 @@ class LangGenerator(generator.Generator):
             ]) for program in self.handler_programs
         ]))
 
-        self.marshall_file.add(method)
+        self.marshal_file.add(method)
 
         # Opcodes enum
         opcodes = gen.Scope([
@@ -548,8 +548,9 @@ class LangGenerator(generator.Generator):
                 ], ending=';')
             ])
 
-        with open(f'{path}/marshall.hpp', 'w') as fp:
-            fp.write(self.marshall_file.header([
+        with open(f'{path}/marshal.hpp', 'w') as fp:
+            fp.write(self.marshal_file.header([
+                gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement('class client'),
@@ -557,16 +558,17 @@ class LangGenerator(generator.Generator):
                 packet_fwd()
             ]))
 
-        with open(f'{path}/marshall.cpp', 'w') as fp:
-            fp.write(self.marshall_file.source([
+        with open(f'{path}/marshal.cpp', 'w') as fp:
+            fp.write(self.marshal_file.source([
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
-                gen.Statement(f'#include <{include_path}/marshall.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/marshal.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
             ]))
 
         with open(f'{path}/rpc.hpp', 'w') as fp:
             fp.write(self.rpc_file.header([
+                gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
@@ -577,12 +579,13 @@ class LangGenerator(generator.Generator):
 
         with open(f'{path}/rpc.cpp', 'w') as fp:
             fp.write(self.rpc_file.source([
-                gen.Statement(f'#include <{include_path}/marshall.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/marshal.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/rpc.hpp>', ending=''),
             ]))
 
         with open(f'{path}/rpc_detail.hpp', 'w') as fp:
             fp.write(self.rpc_detail_file.header([
+                gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement('class client'),
                 packet_fwd()
@@ -595,16 +598,20 @@ class LangGenerator(generator.Generator):
 
         with open(f'{path}/structs.hpp', 'w') as fp:
             fp.write(self.structs_file.header([
+                gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <optional>', ending=''),
                 gen.Statement(f'#include <vector>', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending='')
             ]))
 
         with open(f'{path}/opcodes.hpp', 'w') as fp:
-            fp.write(self.opcodes_file.source())
+            fp.write(self.opcodes_file.source([
+                gen.Statement(f'#pragma once', ending='')
+            ]))
 
         with open(f'{path}/protocol_queues.hpp', 'w') as fp:
             fp.write(self.queues_file.header([
+                gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 packet_fwd(),
