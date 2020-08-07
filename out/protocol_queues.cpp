@@ -11,7 +11,7 @@ namespace kumo
         _reliable.ack(block_id);
         _ordered.ack(block_id);
     }
-    void protocol_queues::process(uint16_t id, uint16_t& remaining, typename ::kumo::detail::packets_by_block& by_block)
+    void protocol_queues::process(uint16_t id, uint16_t& remaining, typename ::kaminari::detail::packets_by_block& by_block)
     {
         _reliable.process(block_id, remaining, by_block);
         _ordered.process(block_id, remaining, by_block);

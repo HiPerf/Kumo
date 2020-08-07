@@ -3,6 +3,15 @@
 #include <map>
 #include <boost/intrusive_ptr.hpp>
 #include <kumo/opcodes.hpp>
+#include <kumo/marshal.hpp>
+#include <kaminari/queues/reliable_queue.hpp>
+#include <kaminari/queues/unreliable_queue.hpp>
+#include <kaminari/queues/eventually_synced_queue.hpp>
+#include <kaminari/packers/immediate_packer.hpp>
+#include <kaminari/packers/merge_packer.hpp>
+#include <kaminari/packers/most_recent_packer_by_opcode.hpp>
+#include <kaminari/packers/ordered_packer.hpp>
+#include <kaminari/packers/unique_merge_packer.hpp>
 namespace kaminari
 {
     class packet;
@@ -11,7 +20,7 @@ namespace kaminari
 {
     namespace detail
     {
-        using packets_by_block = std::map<uint32_t, std::vector<Packet::Ptr>>;
+        using packets_by_block = std::map<uint32_t, std::vector<boost::intrusive_ptr<packet>>>;
     }
 }
 namespace kumo
@@ -26,7 +35,7 @@ namespace kumo
     private:
         void reset();
         void ack(uint16_t block_id);
-        void process(uint16_t id, uint16_t& remaining, typename ::kumo::detail::packets_by_block& by_block);
+        void process(uint16_t id, uint16_t& remaining, typename ::kaminari::detail::packets_by_block& by_block);
         template <typename D, typename T>
         void send_reliable(::kumo::opcode opcode, D&& data, T&& callback);
         void send_reliable(const boost::intrusive_ptr<::kaminari::packet>& packet);

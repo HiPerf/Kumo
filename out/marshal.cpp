@@ -29,19 +29,20 @@ namespace kumo
     }
     uint8_t marshal::packet_size(const complex& data)
     {
-        uint8_t size = 0;
+        uint8int8_t size = 0;
         size += sizeof(bool);
-        if (static_cast<bool>(data.x));
+        if (static_cast<bool>(data.x))
         {
             size += sizeof_uint32();
         }
         size += sizeof(uint8_t) + (data.y).size() * sizeof_spawn_data();
         size += sizeof_int32();
         size += sizeof(bool);
-        if (static_cast<bool>(data.w));
+        if (static_cast<bool>(data.w))
         {
             size += sizeof(uint8_t) + (*data.w).size() * sizeof_bool();
         }
+        return size;
     }
     void marshal::pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const spawn_data& data)
     {
@@ -60,7 +61,12 @@ namespace kumo
     }
     bool marshal::unpack(::kaminari::packet_reader* packet, movement& data)
     {
-        data.direction = packet->read<int8>();
+        if (packet->bytes_read() + sizeof_int8() >= packet->buffer_size())
+        {
+            return false;;
+        }
+        data.direction = packet->read<int8_t>();
+        return true;
     }
     uint8_t marshal::packet_size(const movement& data)
     {

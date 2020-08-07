@@ -236,7 +236,7 @@ class Class(object):
     def both(self, level, eval_fn=None):
         modifiers = '' if not self.decl_modifiers else (' '.join(self.decl_modifiers) + ' ')
         ending = '' if not self.cpp_style else ';'
-        cls = indent(f'{modifiers}{self.keyword} {self.name}\n', level)
+        cls = indent(f'{modifiers}{self.keyword} {self.name}{self.decl_name_base}\n', level)
         preface = indent('{\n', level)
         postface = indent('}' + ending + '\n', level)
 

@@ -123,7 +123,7 @@ class LangGenerator(generator.Generator):
             if not self.is_message(inner):
                 return gen.Scope([
                     gen.Statement(f'uint8_t size = packet->read<uint8_t>()'),
-                    gen.Statement(f'if (packet->bytes_read() + size * sizeof_{inner}() > packet->buffer_size())', ending=''),
+                    gen.Statement(f'if (packet->bytes_read() + size * sizeof_{inner}() >= packet->buffer_size())', ending=''),
                     gen.Block([
                         gen.Statement('return false;')
                     ]),
@@ -141,14 +141,29 @@ class LangGenerator(generator.Generator):
                         gen.Statement(f'if (unpack(packet, data)', ending=''),
                         gen.Block([
                             gen.Statement(f'({variable}).push_back(std::move(data))')
+                        ]),
+                        gen.Statement(f'else'),
+                        gen.Block([
+                            gen.Statement('return false')
                         ])
                     ])
                 ])
 
         if self.is_message(dtype):
-            return gen.Statement(f'unpack(packet, data)')
+            return gen.Scope([
+                gen.Statement(f'if (!unpack(packet, data))', ending=''),
+                gen.Block([
+                    gen.Statement('return false')
+                ])
+            ])
 
-        return gen.Statement(f'{variable} = packet->read<{dtype}>()')
+        return gen.Scope([
+            gen.Statement(f'if (packet->bytes_read() + sizeof_{dtype}() >= packet->buffer_size())', ending=''),
+            gen.Block([
+                gen.Statement('return false;')
+            ]),
+            gen.Statement(f'{variable} = packet->read<{TYPE_CONVERSION[dtype]}>()')
+        ])
 
     def __write_size(self, decl, variable):
         dtype = decl.dtype.dtype.eval()
@@ -244,7 +259,7 @@ class LangGenerator(generator.Generator):
             name = decl.name.eval()
 
             if decl.optional:
-                method.append(gen.Statement(f'if (packet->bytes_read() + sizeof(bool) > packet->buffer_size())', ending=''))
+                method.append(gen.Statement(f'if (packet->bytes_read() + sizeof(bool) >= packet->buffer_size())', ending=''))
                 method.append(gen.Block([
                     gen.Statement('return false')
                 ]))
@@ -256,6 +271,7 @@ class LangGenerator(generator.Generator):
             else:
                 method.append(self.__read_type(decl, f'data.{name}'))
 
+        method.append(gen.Statement('return true'))
         self.marshal_cls.methods.append(method)
         #self.marshal_file.add(method)
         return method
@@ -278,19 +294,20 @@ class LangGenerator(generator.Generator):
             method.append(gen.Statement(f'return sizeof({message_name})'))
             methods.append(method)
         else:
-            method.append(gen.Statement('uint8_t size = 0'))    
+            method.append(gen.Statement('uint8int8_t size = 0'))    
             # Manually loop all types
             for decl in self.message_fields_including_base(message):
                 name = decl.name.eval()
 
                 if decl.optional:
                     method.append(gen.Statement('size += sizeof(bool)'))
-                    method.append(gen.Statement(f'if (static_cast<bool>(data.{name}))'))
+                    method.append(gen.Statement(f'if (static_cast<bool>(data.{name}))', ending=''))
                     method.append(gen.Block([
                         self.__write_size(decl, f'*data.{name}')
                     ]))
                 else:
                     method.append(self.__write_size(decl, f'data.{name}'))
+            method.append(gen.Statement('return size'))
 
         for method in methods:
             self.marshal_cls.methods.append(method)
@@ -485,7 +502,7 @@ class LangGenerator(generator.Generator):
         process = gen.Method('void', 'process', [
             gen.Variable('uint16_t', 'id'),
             gen.Variable('uint16_t&', 'remaining'),
-            gen.Variable('typename ::kumo::detail::packets_by_block&', 'by_block')
+            gen.Variable('typename ::kaminari::detail::packets_by_block&', 'by_block')
         ])
         process.append(gen.Scope([
             gen.Statement(f'_{queue}.process(block_id, remaining, by_block)') for queue in self.queues.keys()
@@ -571,6 +588,7 @@ class LangGenerator(generator.Generator):
             fp.write(self.rpc_file.header([
                 gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/protocol_queues.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
@@ -617,11 +635,20 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <map>', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/marshal.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/queues/reliable_queue.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/queues/unreliable_queue.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/queues/eventually_synced_queue.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/packers/immediate_packer.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/packers/merge_packer.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/packers/most_recent_packer_by_opcode.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/packers/ordered_packer.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/packers/unique_merge_packer.hpp>', ending=''),
                 kaminari_fwd(gen.Statement('class packet')),
                 kaminari_fwd([
                     gen.Statement('namespace detail', ending=''),
                     gen.Block([
-                        gen.Statement('using packets_by_block = std::map<uint32_t, std::vector<Packet::Ptr>>')
+                        gen.Statement('using packets_by_block = std::map<uint32_t, std::vector<boost::intrusive_ptr<packet>>>')
                     ])
                 ])
             ]))
