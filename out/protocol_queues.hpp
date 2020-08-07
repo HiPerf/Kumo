@@ -18,6 +18,11 @@ namespace kaminari
 }
 namespace kumo
 {
+    class protocol_queues;
+}
+
+namespace kumo
+{
     class protocol_queues
     {
     private:
@@ -45,8 +50,4 @@ namespace kumo
     {
         _ordered.add(opcode, std::forward<D>(data), std::forward<T>(callback));
     }
-}
-
-namespace kumo
-{
 }

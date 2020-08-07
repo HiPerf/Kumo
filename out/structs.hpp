@@ -4,6 +4,14 @@
 #include <inttypes.h>
 namespace kumo
 {
+    struct complex;
+    struct has_id;
+    struct spawn_data;
+    struct movement;
+}
+
+namespace kumo
+{
     struct complex
     {
     public:
@@ -19,7 +27,7 @@ namespace kumo
         int64_t id;
     };
 
-    struct spawn_data : public has_id 
+    struct spawn_data
     {
     public:
         int8_t x;
@@ -32,8 +40,4 @@ namespace kumo
         int8_t direction;
     };
 
-}
-
-namespace kumo
-{
 }

@@ -212,7 +212,7 @@ class Class(object):
         methods = (x.both(level, modifiers, eval_fn=eval_fn) for x in self.methods if x.visibility == visibility)
         methods = ''.join(methods)
 
-        if self.cpp_style:
+        if self.cpp_style and methods:
             return indent(visibility.value + ':\n', level - 1) + methods
 
         return methods
@@ -220,23 +220,7 @@ class Class(object):
     @check_eval_fn
     def decl(self, level, eval_fn=None):
         assert not self.csharp_style, 'Call \'both\' in csharp_style'
-
-        modifiers = '' if not self.decl_modifiers else (' '.join(self.decl_modifiers) + ' ')
-        decl_name_base = '' if not self.decl_name_base else f' {self.decl_name_base} '
-        ending = '' if not self.cpp_style else ';'
-        cls = indent(f'{modifiers}{self.keyword} {self.name}{decl_name_base}\n', level)
-        preface = indent('{\n', level)
-        postface = indent('}' + ending + '\n', level)
-
-        return cls + preface + \
-            self._decl_methods(Visibility.PUBLIC, level + 1, eval_fn=eval_fn) + \
-            self._decl_methods(Visibility.PROTECTED, level + 1, eval_fn=eval_fn) + \
-            self._decl_methods(Visibility.PRIVATE, level + 1, eval_fn=eval_fn) + \
-            self._decl_attributes(Visibility.PUBLIC, level + 1, eval_fn=eval_fn) + \
-            self._decl_attributes(Visibility.PROTECTED, level + 1, eval_fn=eval_fn) + \
-            self._decl_attributes(Visibility.PRIVATE, level + 1, eval_fn=eval_fn) + \
-            postface + '\n' + \
-            self._in_decl_templates(level, eval_fn=eval_fn)
+        return Statement(f'{self.keyword} {self.name}').decl(level, eval_fn=eval_fn)
 
     @check_eval_fn
     def instance(self, level, eval_fn=None):
@@ -248,14 +232,24 @@ class Class(object):
     
     @check_eval_fn
     def both(self, level, eval_fn=None):
-        if self.cpp_style:
-            return ''
-
         modifiers = '' if not self.decl_modifiers else (' '.join(self.decl_modifiers) + ' ')
         ending = '' if not self.cpp_style else ';'
         cls = indent(f'{modifiers}{self.keyword} {self.name}\n', level)
         preface = indent('{\n', level)
         postface = indent('}' + ending + '\n', level)
+
+        if self.cpp_style:
+            # eval_fn is omitted on purpouse in the _decl_methods calls
+
+            return cls + preface + \
+                self._decl_methods(Visibility.PUBLIC, level + 1) + \
+                self._decl_methods(Visibility.PROTECTED, level + 1) + \
+                self._decl_methods(Visibility.PRIVATE, level + 1) + \
+                self._decl_attributes(Visibility.PUBLIC, level + 1, eval_fn=eval_fn) + \
+                self._decl_attributes(Visibility.PROTECTED, level + 1, eval_fn=eval_fn) + \
+                self._decl_attributes(Visibility.PRIVATE, level + 1, eval_fn=eval_fn) + \
+                postface + '\n' + \
+                ('' if self.csharp_style else self._in_decl_templates(level, eval_fn=eval_fn))
 
         return cls + preface + \
             self._both_methods(Visibility.PUBLIC, level + 1, eval_fn=eval_fn) + \
@@ -264,5 +258,4 @@ class Class(object):
             self._decl_attributes(Visibility.PUBLIC, level + 1, eval_fn=eval_fn) + \
             self._decl_attributes(Visibility.PROTECTED, level + 1, eval_fn=eval_fn) + \
             self._decl_attributes(Visibility.PRIVATE, level + 1, eval_fn=eval_fn) + \
-            postface + '\n' + \
-            ('' if self.csharp_style else self._in_decl_templates(level, eval_fn=eval_fn))
+            postface + '\n'
