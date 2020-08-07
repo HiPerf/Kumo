@@ -4,7 +4,7 @@
 #include <kaminari/buffers/packet_reader.hpp>
 namespace kumo
 {
-    void pack(const ::kaminari::packet::ptr& packet, const complex& data)
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const complex& data)
     {
         *packet << static_cast<bool>(data.x);
         if (static_cast<bool>(data.x))
@@ -14,7 +14,7 @@ namespace kumo
         *packet << static_cast<uint8_t>((data.y).size());
         for (const auto& val : data.y)
         {
-            pack_spawn_data(packet, val);
+            pack(packet, val);
         }
         *packet << data.z;
         *packet << static_cast<bool>(data.w);
@@ -27,7 +27,7 @@ namespace kumo
             }
         }
     }
-    uint8_t packet_size(const complex& data)
+    uint8_t marshal::packet_size(const complex& data)
     {
         uint8_t size = 0;
         size += sizeof(bool);
@@ -43,37 +43,37 @@ namespace kumo
             size += sizeof(uint8_t) + (*data.w).size() * sizeof_bool();
         }
     }
-    void pack(const ::kaminari::packet::ptr& packet, const spawn_data& data)
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const spawn_data& data)
     {
         *packet << data.id;
         *packet << data.x;
         *packet << data.y;
     }
-    uint8_t packet_size(const spawn_data& data)
+    uint8_t marshal::packet_size(const spawn_data& data)
     {
         (void)data;
         return sizeof(spawn_data);
     }
-    uint8_t sizeof_spawn_data()
+    uint8_t marshal::sizeof_spawn_data()
     {
         return sizeof(spawn_data);
     }
-    bool unpack(::kaminari::packet_reader* packet, movement& data)
+    bool marshal::unpack(::kaminari::packet_reader* packet, movement& data)
     {
         data.direction = packet->read<int8>();
     }
-    uint8_t packet_size(const movement& data)
+    uint8_t marshal::packet_size(const movement& data)
     {
         (void)data;
         return sizeof(movement);
     }
-    uint8_t sizeof_movement()
+    uint8_t marshal::sizeof_movement()
     {
         return sizeof(movement);
     }
-    bool handle_packet(::kaminari::packet_reader* packet, client* client)
+    bool marshal::handle_packet(::kaminari::packet_reader* packet, client* client)
     {
-        switch (packet->opcode())
+        switch (static_cast<::kumo::opcode>(packet->opcode()))
         {
             case opcode::move:
                 return handle_move(packet, client);

@@ -3,11 +3,7 @@
 class client;
 namespace kaminari
 {
-    class packet
-    {
-        public:
-        using ptr = boost::intrusive_ptr<packet>;
-    };
+    class packet;
 }
 namespace kumo
 {

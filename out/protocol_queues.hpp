@@ -1,13 +1,11 @@
 #pragma once
 #include <inttypes.h>
+#include <map>
+#include <boost/intrusive_ptr.hpp>
 #include <kumo/opcodes.hpp>
 namespace kaminari
 {
-    class packet
-    {
-        public:
-        using ptr = boost::intrusive_ptr<packet>;
-    };
+    class packet;
 }
 namespace kaminari
 {
@@ -31,10 +29,10 @@ namespace kumo
         void process(uint16_t id, uint16_t& remaining, typename ::kumo::detail::packets_by_block& by_block);
         template <typename D, typename T>
         void send_reliable(::kumo::opcode opcode, D&& data, T&& callback);
-        void send_reliable(const typename ::kaminari::packet::ptr& packet);
+        void send_reliable(const boost::intrusive_ptr<::kaminari::packet>& packet);
         template <typename D, typename T>
         void send_ordered(::kumo::opcode opcode, D&& data, T&& callback);
-        void send_ordered(const typename ::kaminari::packet::ptr& packet);
+        void send_ordered(const boost::intrusive_ptr<::kaminari::packet>& packet);
     private:
         ::kaminari::reliable_queue<::kaminari::immediate_packer> _reliable;
         ::kaminari::reliable_queue<::kaminari::ordered_packer> _ordered;

@@ -127,10 +127,11 @@ class Method(Block):
         return template + indent(f'{modifiers}{self.dtype} {self.name}({parameters});\n', level)
 
     @check_eval_fn
-    def instance(self, level, name_ns='', eval_fn=None):
+    def instance(self, level, name_ns='', modifiers=[], eval_fn=None):
+        modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
         parameters = ', '.join(x.instance(eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
-        fnc = template + indent(f'{self.dtype} {name_ns}{self.name}({parameters})\n', level)
+        fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters})\n', level)
         return fnc + super().instance(level, eval_fn=eval_fn)
 
     @check_eval_fn
@@ -201,7 +202,8 @@ class Class(object):
 
     def _in_decl_templates(self, level, eval_fn=None):
         name_ns = '' if not self.cpp_style else f'{self.name}::'
-        return ''.join(x.instance(level, name_ns, eval_fn=eval_fn) for x in self.methods if x.template is not None)
+        return ''.join(x.instance(level, name_ns, modifiers=[y for y in x.decl_modifiers if y == 'inline'], eval_fn=eval_fn) \
+            for x in self.methods if x.template is not None or 'inline' in x.decl_modifiers)
     
     def _instance_methods(self, visibility, level, templates=False, eval_fn=None):
         name_ns = '' if not self.cpp_style else f'{self.name}::'

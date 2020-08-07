@@ -62,6 +62,9 @@ class LangGenerator(generator.Generator):
         # Some helpers
         self.handler_programs = set()
 
+        # Marshal class
+        self.marshal_cls = gen.Class('marshal', cpp_style=True)
+
         # Output code
         self.marshal_file = File(namespace='kumo')
         self.opcodes_file = File(namespace='kumo')
@@ -69,6 +72,10 @@ class LangGenerator(generator.Generator):
         self.rpc_detail_file = File(namespace='kumo')
         self.structs_file = File(namespace='kumo')
         self.queues_file = File(namespace='kumo')
+
+        # Flush marshal class already
+        self.marshal_file.add(self.marshal_cls)
+
 
     def __is_trivial(self, message: boxes.MessageBox):
         for decl in self.message_fields_including_base(message):
@@ -207,7 +214,7 @@ class LangGenerator(generator.Generator):
         method = gen.Method('void', f'pack', [
             gen.Variable('const boost::intrusive_ptr<::kaminari::packet>&', 'packet'),
             gen.Variable(f'const {message_name}&', 'data')
-        ], visibility=gen.Visibility.PUBLIC)
+        ], decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
 
         for decl in self.message_fields_including_base(message):
             name = decl.name.eval()
@@ -221,7 +228,8 @@ class LangGenerator(generator.Generator):
             else:
                 method.append(self.__write_type(decl, f'data.{name}'))
 
-        self.marshal_file.add(method)
+        self.marshal_cls.methods.append(method)
+        #self.marshal_file.add(method)
         return [method]
 
     def _generate_message_unpacker(self, message: boxes.MessageBox):
@@ -230,7 +238,7 @@ class LangGenerator(generator.Generator):
         method = gen.Method('bool', f'unpack', [
             gen.Variable('::kaminari::packet_reader*', 'packet'),
             gen.Variable(f'{message_name}&', 'data')
-        ], visibility=gen.Visibility.PUBLIC)
+        ], decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
 
         for decl in self.message_fields_including_base(message):
             name = decl.name.eval()
@@ -248,7 +256,8 @@ class LangGenerator(generator.Generator):
             else:
                 method.append(self.__read_type(decl, f'data.{name}'))
 
-        self.marshal_file.add(method)
+        self.marshal_cls.methods.append(method)
+        #self.marshal_file.add(method)
         return method
 
     def _generate_message_size(self, message: boxes.MessageBox):
@@ -257,7 +266,7 @@ class LangGenerator(generator.Generator):
         methods = []
         method = gen.Method('uint8_t', f'packet_size', [
             gen.Variable(f'const {message_name}&', 'data')
-        ], visibility=gen.Visibility.PUBLIC)
+        ], decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
         methods.append(method)
 
         if self.__is_trivial(message):
@@ -265,7 +274,7 @@ class LangGenerator(generator.Generator):
             method.append(gen.Statement(f'return sizeof({message_name})'))
 
             # Method without parameter
-            method = gen.Method('uint8_t', f'sizeof_{message_name}', visibility=gen.Visibility.PUBLIC)
+            method = gen.Method('uint8_t', f'sizeof_{message_name}', decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
             method.append(gen.Statement(f'return sizeof({message_name})'))
             methods.append(method)
         else:
@@ -284,7 +293,7 @@ class LangGenerator(generator.Generator):
                     method.append(self.__write_size(decl, f'data.{name}'))
 
         for method in methods:
-            self.marshal_file.add(method)
+            self.marshal_cls.methods.append(method)
 
         return methods
 
@@ -425,15 +434,15 @@ class LangGenerator(generator.Generator):
         # Trivial types size
         for dtype in semantic.TRIVIAL_TYPES:
             ctype = TYPE_CONVERSION[dtype]
-            method = gen.Method('uint8_t', f'sizeof_{dtype}', decl_modifiers=['inline'])
+            method = gen.Method('uint8_t', f'sizeof_{dtype}', decl_modifiers=['inline', 'static'], visibility=gen.Visibility.PUBLIC)
             method.append(gen.Statement(f'return static_cast<uint8_t>(sizeof({ctype}))'))
-            self.marshal_file.add(method)
+            self.marshal_cls.methods.append(method)
 
         # General packet handler
         method = gen.Method('bool', 'handle_packet', [
             gen.Variable('::kaminari::packet_reader*', 'packet'),
             gen.Variable('client*', 'client')
-        ])
+        ], decl_modifiers=['static'])
 
         method.append(gen.Statement('switch (static_cast<::kumo::opcode>(packet->opcode()))', ending=''))
         method.append(gen.Block([
@@ -445,7 +454,7 @@ class LangGenerator(generator.Generator):
             ]) for program in self.handler_programs
         ]))
 
-        self.marshal_file.add(method)
+        self.marshal_cls.methods.append(method)
 
         # Opcodes enum
         opcodes = gen.Scope([

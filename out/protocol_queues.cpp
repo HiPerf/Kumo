@@ -16,11 +16,11 @@ namespace kumo
         _reliable.process(block_id, remaining, by_block);
         _ordered.process(block_id, remaining, by_block);
     }
-    void protocol_queues::send_reliable(const typename ::kaminari::packet::ptr& packet)
+    void protocol_queues::send_reliable(const boost::intrusive_ptr<::kaminari::packet>& packet)
     {
         _reliable.add(packet);
     }
-    void protocol_queues::send_ordered(const typename ::kaminari::packet::ptr& packet)
+    void protocol_queues::send_ordered(const boost::intrusive_ptr<::kaminari::packet>& packet)
     {
         _ordered.add(packet);
     }
