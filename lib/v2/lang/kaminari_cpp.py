@@ -205,7 +205,7 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         method = gen.Method('void', f'pack', [
-            gen.Variable('const ::kaminari::packet::ptr&', 'packet'),
+            gen.Variable('const boost::intrusive_ptr<::kaminari::packet>&', 'packet'),
             gen.Variable(f'const {message_name}&', 'data')
         ], visibility=gen.Visibility.PUBLIC)
 
@@ -328,7 +328,7 @@ class LangGenerator(generator.Generator):
                     ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
                     methods.append(method)
 
-                    method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
+                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
                     method.append(gen.Statement(f'::kumo::pack(packet, data)'))
                     method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
@@ -340,7 +340,7 @@ class LangGenerator(generator.Generator):
                     ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
                     methods.append(method)
 
-                    method.append(gen.Statement(f'::kaminari::packet::ptr packet = ::kaminari::packet::make(opcode::{program_name})'))
+                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(opcode::{program_name})'))
                     method.append(gen.Statement(f'::kumo::pack(packet, data)'))
                     method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
@@ -524,7 +524,7 @@ class LangGenerator(generator.Generator):
 
             if self.has_queue_packed_add(queue):
                 send = gen.Method('void', f'send_{queue_name}', [
-                    gen.Variable('const typename ::kaminari::packet::ptr&', 'packet')
+                    gen.Variable('const boost::intrusive_ptr<::kaminari::packet>&', 'packet')
                 ])
                 send.append(gen.Statement(f'_{queue_name}.add(packet)'))
                 queues.methods.append(send)
@@ -539,23 +539,15 @@ class LangGenerator(generator.Generator):
                 gen.Block(code)
             ])
 
-        def packet_fwd():
-            return kaminari_fwd([
-                gen.Statement('class packet', ending=''),
-                gen.Block([
-                    gen.Statement('public:', ending=''),
-                    gen.Statement('using ptr = boost::intrusive_ptr<packet>')
-                ], ending=';')
-            ])
-
         with open(f'{path}/marshal.hpp', 'w') as fp:
             fp.write(self.marshal_file.header([
                 gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
+                gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement('class client'),
                 kaminari_fwd(gen.Statement('class packet_reader')),
-                packet_fwd()
+                kaminari_fwd(gen.Statement('class packet'))
             ]))
 
         with open(f'{path}/marshal.cpp', 'w') as fp:
@@ -588,7 +580,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement('class client'),
-                packet_fwd()
+                kaminari_fwd(gen.Statement('class packet'))
             ]))
 
         with open(f'{path}/rpc_detail.cpp', 'w') as fp:
@@ -613,8 +605,9 @@ class LangGenerator(generator.Generator):
             fp.write(self.queues_file.header([
                 gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
+                gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
-                packet_fwd(),
+                kaminari_fwd(gen.Statement('class packet')),
                 kaminari_fwd([
                     gen.Statement('namespace detail', ending=''),
                     gen.Block([
