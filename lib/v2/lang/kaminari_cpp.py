@@ -332,7 +332,7 @@ class LangGenerator(generator.Generator):
                 gen.Variable('::kumo::protocol_queues*', 'pq'),
                 gen.Variable(f'{message_name}&&', 'data'),
                 gen.Variable('T&&', 'callback')
-            ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
+            ], template=gen.Statement('template <typename T>'), visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
             method.append(gen.Statement(f'pq->send_{queue}(static_cast<uint16_t>(opcode::{program_name}), std::move(data), std::forward<T>(callback))'))
             methods.append(method)
         else:
@@ -357,7 +357,7 @@ class LangGenerator(generator.Generator):
                     methods.append(method)
 
                     method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(static_cast<uint16_t>(opcode::{program_name}), std::forward<T>(callback))'))
-                    method.append(gen.Statement(f'::kumo::pack(packet, data)'))
+                    method.append(gen.Statement(f'::kumo::marshal::pack(packet, data)'))
                     method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
                     method.append(gen.Statement(f'}})'))
@@ -369,7 +369,7 @@ class LangGenerator(generator.Generator):
                     methods.append(method)
 
                     method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(static_cast<uint16_t>(opcode::{program_name}))'))
-                    method.append(gen.Statement(f'::kumo::pack(packet, data)'))
+                    method.append(gen.Statement(f'::kumo::marshal::pack(packet, data)'))
                     method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
                     method.append(gen.Statement(f'}})'))
