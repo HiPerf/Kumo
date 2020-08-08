@@ -12,7 +12,7 @@ namespace kumo
             *packet << *data.x;
         }
         *packet << static_cast<uint8_t>((data.y).size());
-        for (const auto& val : data.y)
+        for (const spawn_data& val : data.y)
         {
             pack(packet, val);
         }
@@ -21,7 +21,7 @@ namespace kumo
         if (static_cast<bool>(data.w))
         {
             *packet << static_cast<uint8_t>((*data.w).size());
-            for (const auto& val : *data.w)
+            for (const bool& val : *data.w)
             {
                 *packet << val;
             }
@@ -29,7 +29,7 @@ namespace kumo
     }
     uint8_t marshal::packet_size(const complex& data)
     {
-        uint8int8_t size = 0;
+        uint8_t size = 0;
         size += sizeof(bool);
         if (static_cast<bool>(data.x))
         {

@@ -106,10 +106,13 @@ class LangGenerator(generator.Generator):
         dtype = decl.dtype.dtype.eval()
         if dtype == 'vector':
             inner = decl.dtype.spec.eval()
+            ctype = inner
+            if not self.is_message(inner):
+                ctype = TYPE_CONVERSION[inner]
 
             return gen.Scope([
                 gen.Statement(f'*packet << static_cast<uint8_t>(({variable}).size())'),
-                gen.Statement(f'for (const {TYPE_CONVERSION[inner]}& val : {variable})', ending=''),
+                gen.Statement(f'for (const {ctype}& val : {variable})', ending=''),
                 gen.Block([
                     self.__write_value(decl.dtype.spec.eval(), 'val')
                 ])
