@@ -105,9 +105,11 @@ class LangGenerator(generator.Generator):
     def __write_type(self, decl, variable):
         dtype = decl.dtype.dtype.eval()
         if dtype == 'vector':
+            inner = decl.dtype.spec.eval()
+
             return gen.Scope([
                 gen.Statement(f'*packet << static_cast<uint8_t>(({variable}).size())'),
-                gen.Statement(f'for (const auto& val : {variable})', ending=''),
+                gen.Statement(f'for (const {TYPE_CONVERSION[inner]}& val : {variable})', ending=''),
                 gen.Block([
                     self.__write_value(decl.dtype.spec.eval(), 'val')
                 ])
@@ -294,7 +296,7 @@ class LangGenerator(generator.Generator):
             method.append(gen.Statement(f'return sizeof({message_name})'))
             methods.append(method)
         else:
-            method.append(gen.Statement('uint8int8_t size = 0'))    
+            method.append(gen.Statement('uint8_t size = 0'))    
             # Manually loop all types
             for decl in self.message_fields_including_base(message):
                 name = decl.name.eval()
