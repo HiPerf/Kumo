@@ -4,7 +4,6 @@
 #include <kumo/structs.hpp>
 #include <kaminari/buffers/packet.hpp>
 #include <kaminari/broadcaster.hpp>
-class client;
 namespace kumo
 {
     template <class ReliableAllocator, class OrderedAllocator, typename T>

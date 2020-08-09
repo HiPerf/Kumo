@@ -331,7 +331,7 @@ class LangGenerator(generator.Generator):
         # Templated allocators
         allocators = [f'{queue.capitalize()}Allocator' for queue in self.queues.keys()]
         allocators_template = 'class ' + ', class '.join(allocators)
-        allocators_names = '<' + ', '.join(allocators) + '>'
+        allocators_names = ', '.join(allocators)
     
         # In C++ the callback case also covers the case where users do not want one
         if self.can_queue_have_callback(self.queues[queue]):
@@ -497,7 +497,7 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename... Args>', ending=''))
         
         for i, queue_name in enumerate(self.queues.keys()):
-            constructor.initializers.append(gen.Statement(f'_{queue_name}(resend_threshold, std::forward<decltype(std::get<{i}>(allocator_args))>(std::get<{i}>(allocator_args))...)', ending=''))
+            constructor.initializers.append(gen.Statement(f'_{queue_name}(resend_threshold, std::get<{i}>(std::forward_as_tuple(allocator_args...)))', ending=''))
 
         queues.methods.append(constructor)
 
@@ -592,16 +592,15 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <inttypes.h>', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
-                *marshal_include,
-                kaminari_fwd(gen.Statement('class packet_reader')),
-                kaminari_fwd(gen.Statement('class packet'))
+                gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
+                *marshal_include
             ]))
 
         with open(f'{path}/marshal.cpp', 'w') as fp:
             fp.write(self.marshal_file.source([
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/marshal.hpp>', ending=''),
-                gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
             ]))
 

@@ -3,7 +3,6 @@
 #include <boost/intrusive_ptr.hpp>
 #include <kumo/structs.hpp>
 #include "server/handler.hpp"
-class client;
 namespace kaminari
 {
     class packet_reader;
@@ -11,10 +10,6 @@ namespace kaminari
 namespace kaminari
 {
     class packet;
-}
-namespace kaminari
-{
-    class client;
 }
 namespace kumo
 {
@@ -45,11 +40,27 @@ namespace kumo
         inline constexpr static uint8_t sizeof_float();
         inline constexpr static uint8_t sizeof_double();
         inline constexpr static uint8_t sizeof_bool();
-        static bool handle_packet(::kaminari::packet_reader* packet, ::kaminari::client* client);
+        template <typename C>
+        static bool handle_packet(::kaminari::packet_reader* packet, C* client);
     private:
-        static bool handle_move(::kaminari::packet_reader* packet, ::kaminari::client* client);
+        template <typename C>
+        static bool handle_move(::kaminari::packet_reader* packet, C* client);
     };
 
+    template <typename C>
+    bool marshal::handle_move(::kaminari::packet_reader* packet, C* client)
+    {
+        if (!check_client_status(client, InWorld))
+        {
+            return handle_client_error(client, static_cast<::kumo::opcode>(packet->opcode()));
+        }
+        ::kumo::movement data;
+        if (!unpack(packet, data))
+        {
+            return false;
+        }
+        return on_move(client, data, packet->timestamp());
+    }
     inline constexpr uint8_t marshal::sizeof_int8()
     {
         return static_cast<uint8_t>(sizeof(int8_t));
@@ -93,5 +104,16 @@ namespace kumo
     inline constexpr uint8_t marshal::sizeof_bool()
     {
         return static_cast<uint8_t>(sizeof(bool));
+    }
+    template <typename C>
+    bool marshal::handle_packet(::kaminari::packet_reader* packet, C* client)
+    {
+        switch (static_cast<::kumo::opcode>(packet->opcode()))
+        {
+            case opcode::move:
+                return handle_move(packet, client);
+            default:
+                return false;
+        }
     }
 }
