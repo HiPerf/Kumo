@@ -47,7 +47,7 @@ namespace kumo
         inline constexpr static uint8_t sizeof_bool();
         static bool handle_packet(::kaminari::packet_reader* packet, ::kaminari::client* client);
     private:
-        bool handle_move(::kaminari::packet_reader* packet, ::kaminari::client* client);
+        static bool handle_move(::kaminari::packet_reader* packet, ::kaminari::client* client);
     };
 
     inline constexpr uint8_t marshal::sizeof_int8()

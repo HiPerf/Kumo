@@ -1,7 +1,6 @@
 #pragma once
 #include <kumo/opcodes.hpp>
 #include <kumo/protocol_queues.hpp>
-#include <kumo/rpc_detail.hpp>
 #include <kumo/structs.hpp>
 #include <kaminari/buffers/packet.hpp>
 #include <kaminari/broadcaster.hpp>

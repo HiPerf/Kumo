@@ -66,7 +66,6 @@ class LangGenerator(generator.Generator):
         self.marshal_file = File(namespace='kumo')
         self.opcodes_file = File(namespace='kumo')
         self.rpc_file = File(namespace='kumo')
-        self.rpc_detail_file = File(namespace='kumo')
         self.structs_file = File(namespace='kumo')
         self.queues_file = File(namespace='kumo')
 
@@ -408,7 +407,7 @@ class LangGenerator(generator.Generator):
         method = gen.Method('bool', f'handle_{program_name}', [
             gen.Variable('::kaminari::packet_reader*', 'packet'),
             gen.Variable('::kaminari::client*', 'client')
-        ], visibility=gen.Visibility.PRIVATE)
+        ], visibility=gen.Visibility.PRIVATE, decl_modifiers=['static'])
 
         if program.cond.attr is not None:
             attr = program.cond.attr.eval()
@@ -426,7 +425,7 @@ class LangGenerator(generator.Generator):
             ]))
         
         method.append(gen.Statement(f'::kumo::{message_name} data'))
-        method.append(gen.Statement(f'if (!unpack(packet, data)', ending=''))
+        method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
         method.append(gen.Block([
             gen.Statement('return false')
         ]))
@@ -439,22 +438,6 @@ class LangGenerator(generator.Generator):
         return [method]
 
     def _generate_internals(self):
-        # Per queue internal send to hide implementation details
-        # details_methods = []
-
-        # for queue in self.queues.keys():
-        #     method = gen.Method('void', f'send_{queue}', [
-        #         gen.Variable('client*', 'client'),
-        #         gen.Variable('const ::kaminari::packet::ptr&', 'packet')
-        #     ], visibility=gen.Visibility.PUBLIC)
-        #     method.append(gen.Statement(f'client->send_{queue}(packet)'))
-        #     details_methods.append(method)
-
-        # self.rpc_detail_file.add(gen.Scope([
-        #     gen.Statement('namespace detail', ending=''),
-        #     gen.Block(details_methods)
-        # ]))
-
         # Trivial types size
         for dtype in semantic.TRIVIAL_TYPES:
             ctype = TYPE_CONVERSION[dtype]
@@ -601,7 +584,6 @@ class LangGenerator(generator.Generator):
             fp.write(self.marshal_file.source([
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/marshal.hpp>', ending=''),
-                gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
             ]))
@@ -611,7 +593,6 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/protocol_queues.hpp>', ending=''),
-                gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/broadcaster.hpp>', ending=''),
@@ -622,21 +603,6 @@ class LangGenerator(generator.Generator):
             fp.write(self.rpc_file.source([
                 gen.Statement(f'#include <{include_path}/marshal.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/rpc.hpp>', ending=''),
-            ]))
-
-        with open(f'{path}/rpc_detail.hpp', 'w') as fp:
-            fp.write(self.rpc_detail_file.header([
-                gen.Statement(f'#pragma once', ending=''),
-                kaminari_fwd(gen.Statement('class packet_reader')),
-                kaminari_fwd(gen.Statement('class client'))
-            ]))
-
-        with open(f'{path}/rpc_detail.cpp', 'w') as fp:
-            fp.write(self.rpc_detail_file.source([
-                gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
-                gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
-                gen.Statement(f'#include <kaminari/packet_reader.hpp>', ending=''),
-                gen.Statement(f'#include <kaminari/client.hpp>', ending=''),
             ]))
 
         with open(f'{path}/structs.hpp', 'w') as fp:

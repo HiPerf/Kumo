@@ -1,6 +1,5 @@
 #include <kumo/opcodes.hpp>
 #include <kumo/marshal.hpp>
-#include <kumo/rpc_detail.hpp>
 #include <kaminari/buffers/packet.hpp>
 #include <kaminari/buffers/packet_reader.hpp>
 namespace kumo
@@ -95,7 +94,7 @@ namespace kumo
             return handle_client_error(client, static_cast<::kumo::opcode>(packet->opcode()));
         }
         ::kumo::movement data;
-        if (!unpack(packet, data)
+        if (!unpack(packet, data))
         {
             return false;
         }
