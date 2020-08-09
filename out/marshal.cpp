@@ -1,5 +1,6 @@
 #include <kumo/opcodes.hpp>
 #include <kumo/marshal.hpp>
+#include <kumo/rpc_detail.hpp>
 #include <kaminari/buffers/packet.hpp>
 #include <kaminari/buffers/packet_reader.hpp>
 namespace kumo
@@ -77,12 +78,27 @@ namespace kumo
     {
         return sizeof(movement);
     }
-    bool marshal::handle_packet(::kaminari::packet_reader* packet, client* client)
+    bool marshal::handle_packet(::kaminari::packet_reader* packet, ::kaminari::client* client)
     {
         switch (static_cast<::kumo::opcode>(packet->opcode()))
         {
             case opcode::move:
-                return handle_move(packet, client);
+                return detail::handle_move(packet, client);
+            default:
+                return false;
         }
+    }
+    bool marshal::handle_move(::kaminari::packet_reader* packet, ::kaminari::client* client)
+    {
+        if (!check_client_status(client, InWorld))
+        {
+            return handle_client_error(client, static_cast<::kumo::opcode>(packet->opcode()));
+        }
+        ::kumo::movement data;
+        if (!unpack(packet, data)
+        {
+            return false;
+        }
+        return on_move(client, data, packet->timestamp());
     }
 }

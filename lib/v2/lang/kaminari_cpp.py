@@ -56,14 +56,11 @@ class File(object):
 
 
 class LangGenerator(generator.Generator):
-    def __init__(self, role, queues, messages, programs):
-        super().__init__(role, queues, messages, programs)
+    def __init__(self, config, role, queues, messages, programs):
+        super().__init__(config, role, queues, messages, programs)
         
         # Some helpers
         self.handler_programs = set()
-
-        # Marshal class
-        self.marshal_cls = gen.Class('marshal', cpp_style=True)
 
         # Output code
         self.marshal_file = File(namespace='kumo')
@@ -74,6 +71,9 @@ class LangGenerator(generator.Generator):
         self.queues_file = File(namespace='kumo')
 
         # Flush marshal class already
+        base_name = self.config.get('marshal', {}).get('base')
+        base_name = '' if not base_name else f':public {base_name}'
+        self.marshal_cls = gen.Class('marshal', decl_name_base=base_name, cpp_style=True)
         self.marshal_file.add(self.marshal_cls)
 
 
@@ -407,8 +407,8 @@ class LangGenerator(generator.Generator):
 
         method = gen.Method('bool', f'handle_{program_name}', [
             gen.Variable('::kaminari::packet_reader*', 'packet'),
-            gen.Variable('client*', 'client')
-        ])
+            gen.Variable('::kaminari::client*', 'client')
+        ], visibility=gen.Visibility.PRIVATE)
 
         if program.cond.attr is not None:
             attr = program.cond.attr.eval()
@@ -417,22 +417,24 @@ class LangGenerator(generator.Generator):
             if false_case.action is not None:
                 false_case = false_case.action.eval()
             else:
-                false_case = 'handle_client_status_error'
+                false_case = 'handle_client_error'
 
-            method.append(gen.Statement(f'if (client->{attr}() != {attr}::{value})', ending=''))
+            #method.append(gen.Statement(f'if (client->{attr}() != {attr}::{value})', ending=''))
+            method.append(gen.Statement(f'if (!check_client_{attr}(client, {value}))', ending=''))
             method.append(gen.Block([
-                gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()), client->{attr}(), {attr}::{value})')
+                gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()))')
             ]))
         
-        method.append(gen.Statement(f'const {message_name} data'))
+        method.append(gen.Statement(f'::kumo::{message_name} data'))
         method.append(gen.Statement(f'if (!unpack(packet, data)', ending=''))
         method.append(gen.Block([
             gen.Statement('return false')
         ]))
 
-        method.append(gen.Statement(f'client->on_{program_name}(packet)'))
+        method.append(gen.Statement(f'return on_{program_name}(client, data, packet->timestamp())'))
 
-        self.handler_programs.add(program)
+        self.handler_programs.add(program_name)
+        self.marshal_cls.methods.append(method)
 
         return [method]
 
@@ -456,25 +458,30 @@ class LangGenerator(generator.Generator):
         # Trivial types size
         for dtype in semantic.TRIVIAL_TYPES:
             ctype = TYPE_CONVERSION[dtype]
-            method = gen.Method('uint8_t', f'sizeof_{dtype}', decl_modifiers=['inline', 'static'], visibility=gen.Visibility.PUBLIC)
+            method = gen.Method('uint8_t', f'sizeof_{dtype}', decl_modifiers=['inline', 'constexpr', 'static'], visibility=gen.Visibility.PUBLIC)
             method.append(gen.Statement(f'return static_cast<uint8_t>(sizeof({ctype}))'))
             self.marshal_cls.methods.append(method)
 
         # General packet handler
         method = gen.Method('bool', 'handle_packet', [
             gen.Variable('::kaminari::packet_reader*', 'packet'),
-            gen.Variable('client*', 'client')
-        ], decl_modifiers=['static'])
+            gen.Variable('::kaminari::client*', 'client')
+        ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
 
         method.append(gen.Statement('switch (static_cast<::kumo::opcode>(packet->opcode()))', ending=''))
         method.append(gen.Block([
             gen.Scope([
-                gen.Statement(f'case opcode::{program.name.eval()}:', ending=''),
+                gen.Statement(f'case opcode::{program}:', ending=''),
                 gen.Scope([
-                    gen.Statement(f'return handle_{program.name.eval()}(packet, client)') 
+                    gen.Statement(f'return detail::handle_{program}(packet, client)') 
                 ], indent=True)
             ]) for program in self.handler_programs
-        ]))
+        ] + [gen.Scope([
+            gen.Statement(f'default:', ending=''),
+            gen.Scope([
+                gen.Statement(f'return false') 
+            ], indent=True)
+        ])]))
 
         self.marshal_cls.methods.append(method)
 
@@ -560,7 +567,7 @@ class LangGenerator(generator.Generator):
                 send.append(gen.Statement(f'_{queue_name}.add(packet)'))
                 queues.methods.append(send)
         
-    def dump(self, path, include_path):
+    def dump(self, path):
         def kaminari_fwd(code):
             if not isinstance(code, list):
                 code = [code]
@@ -570,21 +577,31 @@ class LangGenerator(generator.Generator):
                 gen.Block(code)
             ])
 
+        include_path = self.config.get('include_path', 'kumo')
+
+        # Do we need to include marshal base class?
+        marshal_include = []
+        if self.config.get("marshal", {}).get("base"):
+            marshal_include.append(gen.Statement(f'#include "{self.config["marshal"]["include"]}"', ending=''),)
+
         with open(f'{path}/marshal.hpp', 'w') as fp:
             fp.write(self.marshal_file.header([
                 gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
+                *marshal_include,
                 gen.Statement('class client'),
                 kaminari_fwd(gen.Statement('class packet_reader')),
-                kaminari_fwd(gen.Statement('class packet'))
+                kaminari_fwd(gen.Statement('class packet')),
+                kaminari_fwd(gen.Statement('class client'))
             ]))
 
         with open(f'{path}/marshal.cpp', 'w') as fp:
             fp.write(self.marshal_file.source([
                 gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/marshal.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
             ]))
@@ -610,14 +627,16 @@ class LangGenerator(generator.Generator):
         with open(f'{path}/rpc_detail.hpp', 'w') as fp:
             fp.write(self.rpc_detail_file.header([
                 gen.Statement(f'#pragma once', ending=''),
-                gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
-                gen.Statement('class client'),
-                kaminari_fwd(gen.Statement('class packet'))
+                kaminari_fwd(gen.Statement('class packet_reader')),
+                kaminari_fwd(gen.Statement('class client'))
             ]))
 
         with open(f'{path}/rpc_detail.cpp', 'w') as fp:
             fp.write(self.rpc_detail_file.source([
                 gen.Statement(f'#include <{include_path}/rpc_detail.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/packet_reader.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/client.hpp>', ending=''),
             ]))
 
         with open(f'{path}/structs.hpp', 'w') as fp:

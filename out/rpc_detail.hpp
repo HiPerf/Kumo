@@ -1,9 +1,11 @@
 #pragma once
-#include <boost/intrusive_ptr.hpp>
-class client;
 namespace kaminari
 {
-    class packet;
+    class packet_reader;
+}
+namespace kaminari
+{
+    class client;
 }
 namespace kumo
 {

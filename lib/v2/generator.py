@@ -9,8 +9,9 @@ class Role(Enum):
     CLIENT = 1
 
 class Generator(object):
-    def __init__(self, role, queues, messages, programs):
+    def __init__(self, config, role, queues, messages, programs):
         # Parser data
+        self.config = config
         self.role = role
         self.queues = queues
         self.messages = messages
@@ -48,7 +49,7 @@ class Generator(object):
     def _generate_internals(self):
         pass
 
-    def dump(self, path, include_path):
+    def dump(self, path):
         raise NotImplementedError()
 
 
@@ -108,6 +109,10 @@ class Generator(object):
             return packer in ('immediate_packer', 'ordered_packer')
 
         return False
+
+    def get_program_message(self, program):
+        args = program.args.eval()
+        return args[0]
 
     def generate_structure(self, message):
         message_name = message.name.eval()

@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 import glob
-
+import json
 
 
 def main():
@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--dir', help='folder containing .kumo files', required=True)
     parser.add_argument('--out', help='folder to output files', required=True)
     parser.add_argument('--lang', help='Generator language', required=True)
-    parser.add_argument('--include-path', help='Path where compiler can find this files, cpp', default=None)
+    parser.add_argument('--config', help='Path with options to the generator language', default=None)
     args = parser.parse_args()
 
     assert args.role in ('server', 'client'), f'Unexpected role {args.role}, must be server or client'
@@ -67,15 +67,21 @@ def main():
         lib.semantic.check_program_message(name, program, messages)
         lib.semantic.check_program_arguments(name, program, messages, queues)
 
+    # Read config if any
+    config = {}
+    if args.config:
+        with open(args.config) as fp:
+            config = json.load(fp)
+
     # Chose generator based on language selected
     try:
         LangModule = getattr(lib.lang, args.lang.replace('-', '_'))
-        generator = LangModule.LangGenerator(role, queues, messages, programs)
+        generator = LangModule.LangGenerator(config, role, queues, messages, programs)
     except:
         raise NotImplementedError(f'Language {args.lang} is not yet supported')
 
     generator.generate()
-    generator.dump(args.out, args.include_path or 'kumo')
+    generator.dump(args.out)
 
 
 if __name__ == '__main__':

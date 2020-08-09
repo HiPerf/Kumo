@@ -202,7 +202,7 @@ class Class(object):
 
     def _in_decl_templates(self, level, eval_fn=None):
         name_ns = '' if not self.cpp_style else f'{self.name}::'
-        return ''.join(x.instance(level, name_ns, modifiers=[y for y in x.decl_modifiers if y == 'inline'], eval_fn=eval_fn) \
+        return ''.join(x.instance(level, name_ns, modifiers=[y for y in x.decl_modifiers if y in ('inline', 'constexpr')], eval_fn=eval_fn) \
             for x in self.methods if x.template is not None or 'inline' in x.decl_modifiers)
     
     def _instance_methods(self, visibility, level, templates=False, eval_fn=None):
