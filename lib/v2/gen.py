@@ -191,13 +191,15 @@ class Attribute(object):
         return self.decl(level, modifiers=modifiers, eval_fn=eval_fn)
 
 class Class(object):
-    def __init__(self, name, decl_modifiers=[], decl_name_base='', cpp_style=False, csharp_style=False, keyword='class'):
+    def __init__(self, name, decl_modifiers=[], decl_name_base='', template=(None, None), cpp_style=False, csharp_style=False, keyword='class'):
         self.keyword = keyword
         self.name = name
         self.decl_modifiers = decl_modifiers
         self.decl_name_base = decl_name_base
         self.cpp_style = cpp_style
         self.csharp_style = csharp_style
+        self.template_decl = template[0]
+        self.template_names = template[1]
         self.methods = []
         self.attributes = []
 
@@ -221,14 +223,25 @@ class Class(object):
 
         return methods
 
+    def _get_template_args(self, level):
+        preface = ''
+        template_names = ''
+        if self.template_decl is not None:
+            preface = self.template_decl.instance(level)
+            template_names = '<' + ', '.join(self.template_names) + '>'
+
+        return preface, template_names
+
     def _in_decl_templates(self, level, eval_fn=None):
-        name_ns = '' if not self.cpp_style else f'{self.name}::'
-        return ''.join(x.instance(level, name_ns, modifiers=[y for y in x.decl_modifiers if y in ('inline', 'constexpr')], eval_fn=eval_fn) \
-            for x in self.methods if x.template is not None or 'inline' in x.decl_modifiers)
+        preface, template_names = self._get_template_args(level)
+        name_ns = '' if not self.cpp_style else f'{self.name}{template_names}::'
+        return ''.join(preface + x.instance(level, name_ns, modifiers=[y for y in x.decl_modifiers if y in ('inline', 'constexpr')], eval_fn=None) \
+            for x in self.methods if self.template_decl is not None or x.template is not None or 'inline' in x.decl_modifiers)
     
     def _instance_methods(self, visibility, level, templates=False, eval_fn=None):
-        name_ns = '' if not self.cpp_style else f'{self.name}::'
-        return ''.join(x.instance(level, name_ns, eval_fn=eval_fn) for x in self.methods if x.visibility == visibility and (templates or x.template is None))
+        preface, template_names = self._get_template_args(level)
+        name_ns = '' if not self.cpp_style else f'{self.name}{template_names}::'
+        return preface + ''.join(x.instance(level, name_ns, eval_fn=eval_fn) for x in self.methods if x.visibility == visibility and (templates or x.template is None))
 
     def _both_methods(self, visibility, level, eval_fn=None):
         modifiers = [] if not self.csharp_style else [visibility.value]
@@ -243,11 +256,15 @@ class Class(object):
     @check_eval_fn
     def decl(self, level, eval_fn=None):
         assert not self.csharp_style, 'Call \'both\' in csharp_style'
-        return Statement(f'{self.keyword} {self.name}').decl(level, eval_fn=eval_fn)
+        preface, _ = self._get_template_args(level)
+        return preface + Statement(f'{self.keyword} {self.name}').decl(level, eval_fn=eval_fn)
 
     @check_eval_fn
     def instance(self, level, eval_fn=None):
         assert not self.csharp_style, 'Call \'both\' in csharp_style'
+
+        if self.template_decl is not None:
+            return ''
 
         return self._instance_methods(Visibility.PUBLIC, level, eval_fn=eval_fn) + \
             self._instance_methods(Visibility.PROTECTED, level, eval_fn=eval_fn) + \
@@ -255,6 +272,7 @@ class Class(object):
     
     @check_eval_fn
     def both(self, level, eval_fn=None):
+        template_preface, _ = self._get_template_args(level)
         modifiers = '' if not self.decl_modifiers else (' '.join(self.decl_modifiers) + ' ')
         ending = '' if not self.cpp_style else ';'
         cls = indent(f'{modifiers}{self.keyword} {self.name}{self.decl_name_base}\n', level)
@@ -264,7 +282,7 @@ class Class(object):
         if self.cpp_style:
             # eval_fn is omitted on purpouse in the _decl_methods calls
 
-            return cls + preface + \
+            return template_preface + cls + preface + \
                 self._decl_methods(Visibility.PUBLIC, level + 1) + \
                 self._decl_methods(Visibility.PROTECTED, level + 1) + \
                 self._decl_methods(Visibility.PRIVATE, level + 1) + \

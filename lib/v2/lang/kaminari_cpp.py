@@ -479,7 +479,11 @@ class LangGenerator(generator.Generator):
         self.opcodes_file.add(opcodes)
 
         # Protocol queues
-        queues = gen.Class('protocol_queues', cpp_style=True)
+        # for each queue we need a template allocator
+        template_names = [f'{queue_name.capitalize()}Allocator' for queue_name, queue in self.queues.items()]
+        template = 'template <class ' + ' class '.join(template_names) + '>'
+
+        queues = gen.Class('protocol_queues', cpp_style=True, template=(gen.Statement(template, ending=''), template_names))
         self.queues_file.add(queues)
         
         constructor = gen.Constructor('', 'protocol_queues', [
@@ -487,8 +491,8 @@ class LangGenerator(generator.Generator):
             gen.Variable('Args&&...', 'allocator_args')
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename... Args>', ending=''))
         
-        for queue_name in self.queues.keys():
-            constructor.initializers.append(gen.Statement(f'_{queue_name}(resend_threshold, std::forward<Args>(allocator_args)...)', ending=''))
+        for i, queue_name in enumerate(self.queues.keys()):
+            constructor.initializers.append(gen.Statement(f'_{queue_name}(resend_threshold, std::forward<decltype(std::get<{i}>(allocator_args))>(std::get<{i}>(allocator_args))...)', ending=''))
 
         queues.methods.append(constructor)
 
@@ -518,14 +522,14 @@ class LangGenerator(generator.Generator):
             # Attribute
             queue_base = queue.base.subtype.eval()
             queue_packer = 'immediate_packer'
-            queue_packer_template = '<::kumo::marshal>'
+            queue_packer_template = f'<::kumo::marshal, {queue_name.capitalize()}Allocator>'
             if queue.specifier.queue_type == boxes.QueueSpecifierType.SPECIALIZED:
                 queue_packer = queue.specifier.args.eval()
 
             elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
                 queue_packer = 'unique_merge_packer'
                 args = queue.specifier.args
-                queue_packer_template = f'<{args[0].eval()}, {args[1].eval()}, {args[2].eval()}, ::kumo::marshal>'
+                queue_packer_template = f'<{args[0].eval()}, {args[1].eval()}, {args[2].eval()}, ::kumo::marshal, {queue_name.capitalize()}Allocator>'
 
             queue_packer = queue_packer + queue_packer_template
             if queue.base.argument is not None:
@@ -652,9 +656,4 @@ class LangGenerator(generator.Generator):
                     ])
                 ])
             ]))
-            
-        with open(f'{path}/protocol_queues.cpp', 'w') as fp:
-            fp.write(self.queues_file.source([
-                gen.Statement(f'#include <{include_path}/protocol_queues.hpp>', ending=''),
-            ]))
-            
+        
