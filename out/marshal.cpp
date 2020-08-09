@@ -82,7 +82,7 @@ namespace kumo
         switch (static_cast<::kumo::opcode>(packet->opcode()))
         {
             case opcode::move:
-                return detail::handle_move(packet, client);
+                return handle_move(packet, client);
             default:
                 return false;
         }

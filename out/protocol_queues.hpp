@@ -32,7 +32,9 @@ namespace kumo
 {
     class protocol_queues
     {
-    private:
+    public:
+        template <typename... Args>
+         protocol_queues(uint8_t resend_threshold, Args&&... allocator_args);
         void reset();
         void ack(uint16_t block_id);
         void process(uint16_t id, uint16_t& remaining, typename ::kaminari::detail::packets_by_block& by_block);
@@ -47,6 +49,12 @@ namespace kumo
         ::kaminari::reliable_queue<::kaminari::ordered_packer<::kumo::marshal>> _ordered;
     };
 
+    template <typename... Args>
+     protocol_queues::protocol_queues(uint8_t resend_threshold, Args&&... allocator_args):
+        _reliable(resend_threshold, std::forward<Args>(allocator_args)...),
+        _ordered(resend_threshold, std::forward<Args>(allocator_args)...)
+    {
+    }
     template <typename D, typename T>
     void protocol_queues::send_reliable(::kumo::opcode opcode, D&& data, T&& callback)
     {

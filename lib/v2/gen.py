@@ -31,17 +31,17 @@ class Statement(object):
         self.ending = ending
 
     @check_eval_fn
-    def _eval(self, level, fn, eval_fn=None):
-        return indent(self.stmt + self.ending + '\n', level)
+    def _eval(self, level, fn, eval_fn=None, no_newline=False):
+        return indent(self.stmt + self.ending + ('' if no_newline else '\n'), level)
     
-    def decl(self, level, eval_fn=None):
-        return self._eval(level, 'decl', eval_fn=eval_fn)
+    def decl(self, level, eval_fn=None, no_newline=False):
+        return self._eval(level, 'decl', eval_fn=eval_fn, no_newline=no_newline)
 
-    def instance(self, level, eval_fn=None):
-        return self._eval(level, 'instance', eval_fn=eval_fn)
+    def instance(self, level, eval_fn=None, no_newline=False):
+        return self._eval(level, 'instance', eval_fn=eval_fn, no_newline=no_newline)
     
-    def both(self, level, eval_fn=None):
-        return self._eval(level, 'both', eval_fn=eval_fn)
+    def both(self, level, eval_fn=None, no_newline=False):
+        return self._eval(level, 'both', eval_fn=eval_fn, no_newline=no_newline)
 
 class Scope(list):
     def __init__(self, content=[], indent=False):
@@ -127,21 +127,42 @@ class Method(Block):
         return template + indent(f'{modifiers}{self.dtype} {self.name}({parameters});\n', level)
 
     @check_eval_fn
-    def instance(self, level, name_ns='', modifiers=[], eval_fn=None):
+    def instance(self, level, name_ns='', modifiers=[], postfix='', eval_fn=None):
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
         parameters = ', '.join(x.instance(eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
-        fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters})\n', level)
+        fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters}){postfix}\n', level)
         return fnc + super().instance(level, eval_fn=eval_fn)
 
     @check_eval_fn
-    def both(self, level, modifiers=[], name_ns='', eval_fn=None):
+    def both(self, level, modifiers=[], name_ns='', postfix='', eval_fn=None):
         modifiers = modifiers + self.decl_modifiers
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
         parameters = ', '.join(x.both(eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
-        fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters})\n', level)
+        fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters}){postfix}\n', level)
         return fnc + super().both(level, eval_fn=eval_fn)
+
+class Constructor(Method):
+    def __init__(self, dtype, name, parameters = [], decl_modifiers = [], visibility=Visibility.PRIVATE, template=None):
+        super().__init__(dtype, name, parameters, decl_modifiers, visibility, template)
+        self.initializers = []
+
+    @check_eval_fn
+    def instance(self, level, name_ns='', modifiers=[], eval_fn=None):
+        initializers = ''
+        if self.initializers:
+            initializers = ':\n' + ',\n'.join(x.instance(level + 1, no_newline=True) for x in self.initializers)
+        
+        return super().instance(level, name_ns, modifiers, initializers)
+
+    @check_eval_fn
+    def both(self, level, name_ns='', eval_fn=None):
+        initializers = ''
+        if self.initializers:
+            initializers = ':\n' + '\n'.join(x.both(level + 1, no_newline=True) for x in self.initializers)
+        
+        return super().both(level, name_ns, initializers)
 
 class Attribute(object):
     def __init__(self, dtype, name, default=None, visibility=Visibility.PRIVATE):

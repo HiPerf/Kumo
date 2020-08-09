@@ -334,7 +334,7 @@ class LangGenerator(generator.Generator):
                 gen.Variable('::kumo::protocol_queues*', 'pq'),
                 gen.Variable(f'{message_name}&&', 'data'),
                 gen.Variable('T&&', 'callback')
-            ], template=gen.Statement('template <typename T>'), visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
+            ], template=gen.Statement('template <typename T>', ending=''), visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
             method.append(gen.Statement(f'pq->send_{queue}(static_cast<uint16_t>(opcode::{program_name}), std::move(data), std::forward<T>(callback))'))
             methods.append(method)
         else:
@@ -456,7 +456,7 @@ class LangGenerator(generator.Generator):
             gen.Scope([
                 gen.Statement(f'case opcode::{program}:', ending=''),
                 gen.Scope([
-                    gen.Statement(f'return detail::handle_{program}(packet, client)') 
+                    gen.Statement(f'return handle_{program}(packet, client)') 
                 ], indent=True)
             ]) for program in self.handler_programs
         ] + [gen.Scope([
@@ -482,13 +482,23 @@ class LangGenerator(generator.Generator):
         queues = gen.Class('protocol_queues', cpp_style=True)
         self.queues_file.add(queues)
         
-        reset = gen.Method('void', 'reset')
+        constructor = gen.Constructor('', 'protocol_queues', [
+            gen.Variable('uint8_t', 'resend_threshold'), 
+            gen.Variable('Args&&...', 'allocator_args')
+        ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename... Args>', ending=''))
+        
+        for queue_name in self.queues.keys():
+            constructor.initializers.append(gen.Statement(f'_{queue_name}(resend_threshold, std::forward<Args>(allocator_args)...)', ending=''))
+
+        queues.methods.append(constructor)
+
+        reset = gen.Method('void', 'reset', visibility=gen.Visibility.PUBLIC)
         reset.append(gen.Scope([
             gen.Statement(f'_{queue}.reset()') for queue in self.queues.keys()
         ]))
         queues.methods.append(reset)
 
-        ack = gen.Method('void', 'ack', [gen.Variable('uint16_t', 'block_id')])
+        ack = gen.Method('void', 'ack', [gen.Variable('uint16_t', 'block_id')], visibility=gen.Visibility.PUBLIC)
         ack.append(gen.Scope([
             gen.Statement(f'_{queue}.ack(block_id)') for queue in self.queues.keys()
         ]))
@@ -498,7 +508,7 @@ class LangGenerator(generator.Generator):
             gen.Variable('uint16_t', 'id'),
             gen.Variable('uint16_t&', 'remaining'),
             gen.Variable('typename ::kaminari::detail::packets_by_block&', 'by_block')
-        ])
+        ], visibility=gen.Visibility.PUBLIC)
         process.append(gen.Scope([
             gen.Statement(f'_{queue}.process(block_id, remaining, by_block)') for queue in self.queues.keys()
         ]))
@@ -532,13 +542,13 @@ class LangGenerator(generator.Generator):
                     gen.Variable('::kumo::opcode', 'opcode'),
                     gen.Variable(f'D&&', 'data'),
                     gen.Variable('T&&', 'callback')
-                ], template=gen.Statement('template <typename D, typename T>', ending=''))
+                ], template=gen.Statement('template <typename D, typename T>', ending=''), visibility=gen.Visibility.PUBLIC)
                 send.append(gen.Statement(f'_{queue_name}.add(opcode, std::forward<D>(data), std::forward<T>(callback))'))
             else:
                 send = gen.Method('void', f'send_{queue_name}', [
                     gen.Variable('::kumo::opcode', 'opcode'),
                     gen.Variable(f'D&&', 'data')
-                ], template=gen.Statement('template <typename D>', ending=''))
+                ], template=gen.Statement('template <typename D>', ending=''), visibility=gen.Visibility.PUBLIC)
                 send.append(gen.Statement(f'_{queue_name}.add(opcode, std::forward<D>(data))'))
 
             queues.methods.append(send)
@@ -546,7 +556,7 @@ class LangGenerator(generator.Generator):
             if self.has_queue_packed_add(queue):
                 send = gen.Method('void', f'send_{queue_name}', [
                     gen.Variable('const boost::intrusive_ptr<::kaminari::packet>&', 'packet')
-                ])
+                ], visibility=gen.Visibility.PUBLIC)
                 send.append(gen.Statement(f'_{queue_name}.add(packet)'))
                 queues.methods.append(send)
         
