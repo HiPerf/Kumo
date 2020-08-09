@@ -327,21 +327,26 @@ class LangGenerator(generator.Generator):
 
         # Returned methods
         methods = []
+
+        # Templated allocators
+        allocators = [f'{queue.capitalize()}Allocator' for queue in self.queues.keys()]
+        allocators_template = 'class ' + ', class '.join(allocators)
+        allocators_names = '<' + ', '.join(allocators) + '>'
     
         # In C++ the callback case also covers the case where users do not want one
         if self.can_queue_have_callback(self.queues[queue]):
             method = gen.Method('void', f'send_{program_name}', [
-                gen.Variable('::kumo::protocol_queues*', 'pq'),
+                gen.Variable(f'::kumo::protocol_queues<{allocators_names}>*', 'pq'),
                 gen.Variable(f'{message_name}&&', 'data'),
                 gen.Variable('T&&', 'callback')
-            ], template=gen.Statement('template <typename T>', ending=''), visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
+            ], template=gen.Statement(f'template <{allocators_template}, typename T>', ending=''), visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
             method.append(gen.Statement(f'pq->send_{queue}(static_cast<uint16_t>(opcode::{program_name}), std::move(data), std::forward<T>(callback))'))
             methods.append(method)
         else:
             method = gen.Method('void', f'send_{program_name}', [
-                gen.Variable('::kumo::protocol_queues*', 'pq'),
+                gen.Variable(f'::kumo::protocol_queues<{allocators_names}*', 'pq'),
                 gen.Variable(f'{message_name}&&', 'data')
-            ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
+            ], template=gen.Statement(f'template <{allocators_template}>', ending=''), visibility=gen.Visibility.PUBLIC, decl_modifiers=['inline'])
             method.append(gen.Statement(f'pq->send_{queue}(static_cast<uint16_t>(opcode::{program_name}), std::move(data))'))
             methods.append(method)
         
@@ -406,8 +411,8 @@ class LangGenerator(generator.Generator):
 
         method = gen.Method('bool', f'handle_{program_name}', [
             gen.Variable('::kaminari::packet_reader*', 'packet'),
-            gen.Variable('::kaminari::client*', 'client')
-        ], visibility=gen.Visibility.PRIVATE, decl_modifiers=['static'])
+            gen.Variable('C*', 'client')
+        ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PRIVATE, decl_modifiers=['static'])
 
         if program.cond.attr is not None:
             attr = program.cond.attr.eval()
@@ -448,8 +453,8 @@ class LangGenerator(generator.Generator):
         # General packet handler
         method = gen.Method('bool', 'handle_packet', [
             gen.Variable('::kaminari::packet_reader*', 'packet'),
-            gen.Variable('::kaminari::client*', 'client')
-        ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
+            gen.Variable('C*', 'client')
+        ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
 
         method.append(gen.Statement('switch (static_cast<::kumo::opcode>(packet->opcode()))', ending=''))
         method.append(gen.Block([
@@ -481,7 +486,7 @@ class LangGenerator(generator.Generator):
         # Protocol queues
         # for each queue we need a template allocator
         template_names = [f'{queue_name.capitalize()}Allocator' for queue_name, queue in self.queues.items()]
-        template = 'template <class ' + ' class '.join(template_names) + '>'
+        template = 'template <class ' + ', class '.join(template_names) + '>'
 
         queues = gen.Class('protocol_queues', cpp_style=True, template=(gen.Statement(template, ending=''), template_names))
         self.queues_file.add(queues)
@@ -509,7 +514,7 @@ class LangGenerator(generator.Generator):
         queues.methods.append(ack)
 
         process = gen.Method('void', 'process', [
-            gen.Variable('uint16_t', 'id'),
+            gen.Variable('uint16_t', 'block_id'),
             gen.Variable('uint16_t&', 'remaining'),
             gen.Variable('typename ::kaminari::detail::packets_by_block&', 'by_block')
         ], visibility=gen.Visibility.PUBLIC)
@@ -588,10 +593,8 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 *marshal_include,
-                gen.Statement('class client'),
                 kaminari_fwd(gen.Statement('class packet_reader')),
-                kaminari_fwd(gen.Statement('class packet')),
-                kaminari_fwd(gen.Statement('class client'))
+                kaminari_fwd(gen.Statement('class packet'))
             ]))
 
         with open(f'{path}/marshal.cpp', 'w') as fp:
@@ -609,8 +612,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <{include_path}/protocol_queues.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
-                gen.Statement(f'#include <kaminari/broadcaster.hpp>', ending=''),
-                gen.Statement('class client'),
+                gen.Statement(f'#include <kaminari/broadcaster.hpp>', ending='')
             ]))
 
         with open(f'{path}/rpc.cpp', 'w') as fp:

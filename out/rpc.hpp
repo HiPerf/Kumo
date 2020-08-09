@@ -7,14 +7,14 @@
 class client;
 namespace kumo
 {
-    template <typename T>
-    inline void send_do_sth(::kumo::protocol_queues* pq, complex&& data, T&& callback);
+    template <class ReliableAllocator, class OrderedAllocator, typename T>
+    inline void send_do_sth(::kumo::protocol_queues<<ReliableAllocator, OrderedAllocator>>* pq, complex&& data, T&& callback);
     template <typename B, typename T>
     void broadcast_do_sth(::kaminari::broadcaster<B>* broadcaster, complex&& data, T&& callback);
     template <typename B, typename T>
     void broadcast_do_sth_single(::kaminari::broadcaster<B>* broadcaster, complex&& data, T&& callback);
-    template <typename T>
-    inline void send_spawn(::kumo::protocol_queues* pq, spawn_data&& data, T&& callback);
+    template <class ReliableAllocator, class OrderedAllocator, typename T>
+    inline void send_spawn(::kumo::protocol_queues<<ReliableAllocator, OrderedAllocator>>* pq, spawn_data&& data, T&& callback);
     template <typename B, typename T>
     void broadcast_spawn(::kaminari::broadcaster<B>* broadcaster, spawn_data&& data, T&& callback);
     template <typename B, typename T>
@@ -23,8 +23,8 @@ namespace kumo
 
 namespace kumo
 {
-    template <typename T>
-    inline void send_do_sth(::kumo::protocol_queues* pq, complex&& data, T&& callback)
+    template <class ReliableAllocator, class OrderedAllocator, typename T>
+    inline void send_do_sth(::kumo::protocol_queues<<ReliableAllocator, OrderedAllocator>>* pq, complex&& data, T&& callback)
     {
         pq->send_reliable(static_cast<uint16_t>(opcode::do_sth), std::move(data), std::forward<T>(callback));
     }
@@ -46,8 +46,8 @@ namespace kumo
             pq->send_reliable(packet);
         });
     }
-    template <typename T>
-    inline void send_spawn(::kumo::protocol_queues* pq, spawn_data&& data, T&& callback)
+    template <class ReliableAllocator, class OrderedAllocator, typename T>
+    inline void send_spawn(::kumo::protocol_queues<<ReliableAllocator, OrderedAllocator>>* pq, spawn_data&& data, T&& callback)
     {
         pq->send_reliable(static_cast<uint16_t>(opcode::spawn), std::move(data), std::forward<T>(callback));
     }
