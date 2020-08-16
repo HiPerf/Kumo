@@ -155,7 +155,7 @@ class LangGenerator(generator.Generator):
 
         if self.is_message(dtype):
             return gen.Scope([
-                gen.Statement(f'if (!unpack(packet, data))', ending=''),
+                gen.Statement(f'if (!unpack(packet, {variable}))', ending=''),
                 gen.Block([
                     gen.Statement('return false')
                 ])
@@ -176,6 +176,9 @@ class LangGenerator(generator.Generator):
             #  1) Inner type is trivial thus we can do `size() * sizeof(inner)`
             #  2) Inner type is not trivial and we must iterate
             inner = decl.dtype.spec.eval()
+            ctype = inner
+            if not self.is_message(inner):
+                ctype = TYPE_CONVERSION[inner]
 
             # Case 1
             if not self.is_message(inner) or self.__is_trivial(self.messages[inner]):
@@ -184,7 +187,7 @@ class LangGenerator(generator.Generator):
             else:
                 return gen.Scope([
                     gen.Statement('size += sizeof(uint8_t)'),
-                    gen.Statement(f'for (const auto& val : {variable})', ending=''),
+                    gen.Statement(f'for (const {ctype}& val : {variable})', ending=''),
                     gen.Block([
                         gen.Statement(f'size += packet_size(val)')
                     ])
