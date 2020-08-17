@@ -165,21 +165,22 @@ class Constructor(Method):
         return super().both(level, name_ns, initializers)
 
 class Attribute(object):
-    def __init__(self, dtype, name, default=None, visibility=Visibility.PRIVATE):
+    def __init__(self, dtype, name, default=None, decl_modifiers=[], visibility=Visibility.PRIVATE):
         super().__init__()
 
         self.dtype = dtype
         self.name = name
         self.default = default
         self.visibility = visibility
+        self.decl_modifiers = decl_modifiers
 
     @check_eval_fn
     def decl(self, level, modifiers=[], eval_fn=None):
         if self.default is not None:
-            modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
+            modifiers = '' if not (modifiers + self.decl_modifiers) else (' '.join(modifiers + self.decl_modifiers) + ' ')
             return Statement(f'{modifiers}{self.dtype} {self.name} = {self.default}').decl(level, eval_fn=eval_fn)
 
-        return self.instance(level, eval_fn=eval_fn) 
+        return self.instance(level, modifiers=modifiers + self.decl_modifiers, eval_fn=eval_fn) 
 
     @check_eval_fn
     def instance(self, level, modifiers=[], eval_fn=None):

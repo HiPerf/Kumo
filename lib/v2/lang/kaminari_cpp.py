@@ -129,7 +129,7 @@ class LangGenerator(generator.Generator):
                     gen.Statement(f'uint8_t size = packet->read<uint8_t>()'),
                     gen.Statement(f'if (packet->bytes_read() + size * sizeof_{inner}() >= packet->buffer_size())', ending=''),
                     gen.Block([
-                        gen.Statement('return false;')
+                        gen.Statement('return false')
                     ]),
                     gen.Statement(f'for (int i = 0; i < size; ++i)', ending=''),
                     gen.Block([
@@ -164,7 +164,7 @@ class LangGenerator(generator.Generator):
         return gen.Scope([
             gen.Statement(f'if (packet->bytes_read() + sizeof_{dtype}() >= packet->buffer_size())', ending=''),
             gen.Block([
-                gen.Statement('return false;')
+                gen.Statement('return false')
             ]),
             gen.Statement(f'{variable} = packet->read<{TYPE_CONVERSION[dtype]}>()')
         ])
