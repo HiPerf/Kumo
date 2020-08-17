@@ -3,6 +3,8 @@ from .. import gen
 from .. import boxes
 from .. import semantic
 
+import os
+import sys
 
 
 TYPE_CONVERSION = {
@@ -10,13 +12,13 @@ TYPE_CONVERSION = {
     'uint16':   'Short',
     'uint32':   'Integer',
     'uint64':   'Long',
-    'int8':     'Char',
+    'int8':     'Character',
     'int16':    'Short',
     'int32':    'Integer',
     'int64':    'Long',
-    'float':    'float',
-    'double':   'double',
-    'bool':     'boolean',
+    'float':    'Float',
+    'double':   'Double',
+    'bool':     'Boolean',
     'vector':   'ArrayList',
     'optional': 'Optional'
 }
@@ -54,15 +56,17 @@ class LangGenerator(generator.Generator):
         self.marshal_file = File()
         self.opcodes_file = File()
         self.rpc_file = File()
-        self.structs_file = File()
         self.queues_file = File()
 
+        # All structures
+        self.all_structs = {}
+
         # Flush marshal class already
-        self.marshal_cls = gen.Class('Marshal extends IMarshal', csharp_style=True)
+        self.marshal_cls = gen.Class('Marshal implements IMarshal', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.marshal_file.add(self.marshal_cls)
 
         # RPC class
-        self.rpc_cls = gen.Class('Rpc', csharp_style=True)
+        self.rpc_cls = gen.Class('Rpc', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.rpc_file.add(self.rpc_cls)
 
 
@@ -168,7 +172,7 @@ class LangGenerator(generator.Generator):
             gen.Statement(f'{variable} = packet.read{to_camel_case(dtype)}()')
         ])
 
-    def __write_size(self, decl, variable):
+    def __write_size(self, this, decl, variable):
         dtype = decl.dtype.dtype.eval()
         if dtype == 'vector':
             # There are two cases
@@ -183,30 +187,30 @@ class LangGenerator(generator.Generator):
 
             # Case 1
             if not self.is_message(inner) or self.__is_trivial(self.messages[inner]):
-                return gen.Statement(f'size += Byte.Bytes + {variable}.size() * marshal.sizeof{to_camel_case(inner)}()')
+                return gen.Statement(f'size += Byte.BYTES + {variable}.size() * {this}.sizeof{to_camel_case(inner)}()')
             # Case 2
             else:
                 return gen.Scope([
-                    gen.Statement('size += Byte.Bytes'),
+                    gen.Statement('size += Byte.BYTES'),
                     gen.Statement(f'for ({ctype} val : {variable})', ending=''),
                     gen.Block([
-                        gen.Statement(f'size += val.size(marshal)')
+                        gen.Statement(f'size += val.size({this})')
                     ])
                 ])
             
         elif self.is_message(dtype):
-            return gen.Statement(f'size += {variable}.size(marshal)')
+            return gen.Statement(f'size += {variable}.size({this})')
         else:
-            return gen.Statement(f'size += marshal.sizeof{to_camel_case(dtype)}()')
+            return gen.Statement(f'size += {this}.sizeof{to_camel_case(dtype)}()')
         
     def _generate_structure(self, message: boxes.MessageBox):
         message_name = message.name.eval()
 
-        base = ' extends IData'
+        base = ' implements IData'
         if message.base.name is not None:
             base = f' extends {message.base.name.eval()}'
 
-        struct = gen.Class(to_camel_case(message_name), decl_name_base=base, csharp_style=True)
+        struct = gen.Class(to_camel_case(message_name), decl_name_base=base, csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         for decl in message.fields.eval():
             dtype = decl.dtype.dtype.eval()
             ctype = '{}'
@@ -231,7 +235,7 @@ class LangGenerator(generator.Generator):
                 visibility=gen.Visibility.PUBLIC
             ))
 
-        self.structs_file.add(struct)
+        self.all_structs[to_camel_case(message_name)] = struct
         self.__generate_message_packer(message, struct)
         self.__generate_message_unpacker(message, struct)
         self.__generate_message_size(message, struct)
@@ -248,8 +252,8 @@ class LangGenerator(generator.Generator):
             name = decl.name.eval()
 
             if decl.optional:
-                method.append(gen.Statement(f'packet.writeBoolean(this.{name}.hasValue)'))
-                method.append(gen.Statement(f'if (this.{name}.hasValue)', ending=''))
+                method.append(gen.Statement(f'packet.writeBoolean(this.{name}.hasValue())'))
+                method.append(gen.Statement(f'if (this.{name}.hasValue())', ending=''))
                 method.append(gen.Block([
                     self.__write_type(decl, f'this.{name}.value')
                 ]))
@@ -270,7 +274,7 @@ class LangGenerator(generator.Generator):
             name = decl.name.eval()
 
             if decl.optional:
-                method.append(gen.Statement(f'if (packet.bytesRead() + Byte.Bytes >= packet.bufferSize())', ending=''))
+                method.append(gen.Statement(f'if (packet.bytesRead() + Byte.BYTES >= packet.bufferSize())', ending=''))
                 method.append(gen.Block([
                     gen.Statement('return false')
                 ]))
@@ -298,7 +302,7 @@ class LangGenerator(generator.Generator):
             # Manually loop all types
             for decl in self.message_fields_including_base(message):
                 name = decl.name.eval()
-                method.append(self.__write_size(decl, f'this.{name}'))
+                method.append(self.__write_size('this', decl, f'this.{name}'))
 
             method.append(gen.Statement('return size'))    
 
@@ -314,13 +318,13 @@ class LangGenerator(generator.Generator):
             name = decl.name.eval()
 
             if decl.optional:
-                method.append(gen.Statement('size += Byte.Bytes'))
-                method.append(gen.Statement(f'if (this.{name}.hasValue)', ending=''))
+                method.append(gen.Statement('size += Byte.BYTES'))
+                method.append(gen.Statement(f'if (this.{name}.hasValue())', ending=''))
                 method.append(gen.Block([
-                    self.__write_size(decl, f'this.{name}.value')
+                    self.__write_size('marshal', decl, f'this.{name}.value')
                 ]))
             else:
-                method.append(self.__write_size(decl, f'this.{name}'))
+                method.append(self.__write_size('marshal', decl, f'this.{name}'))
 
         method.append(gen.Statement('return size'))
 
@@ -455,7 +459,7 @@ class LangGenerator(generator.Generator):
             #method.append(gen.Statement(f'if (client->{attr}() != {attr}::{value})', ending=''))
             method.append(gen.Statement(f'if (!clint.check(client, "{attr}", {value}))', ending=''))
             method.append(gen.Block([
-                gen.Statement(f'return {false_case}(client, packet.opcode())')
+                gen.Statement(f'return {false_case}(client, packet.getOpcode())')
             ]))
         
         method.append(gen.Statement(f'{to_camel_case(message_name)} data = new {to_camel_case(message_name)}()'))
@@ -478,18 +482,18 @@ class LangGenerator(generator.Generator):
             method = gen.Method('int', f'sizeof{to_camel_case(dtype)}', visibility=gen.Visibility.PUBLIC)
             if dtype == 'bool':
                 # Java booleans are kinda special
-                method.append(gen.Statement(f'return Byte.Bytes'))
+                method.append(gen.Statement(f'return Byte.BYTES'))
             else:
-                method.append(gen.Statement(f'return {ctype.capitalize()}.Bytes'))
+                method.append(gen.Statement(f'return {ctype.capitalize()}.BYTES'))
             self.marshal_cls.methods.append(method)
 
         # General packet handler
         method = gen.Method('boolean', 'handlePacket', [
-            gen.Variable('Packet', 'packet'),
+            gen.Variable('PacketReader', 'packet'),
             gen.Variable('IClient', 'client')
         ], visibility=gen.Visibility.PUBLIC)
 
-        method.append(gen.Statement('switch (packet.opcode())', ending=''))
+        method.append(gen.Statement('switch (packet.getOpcode())', ending=''))
         method.append(gen.Block([
             gen.Scope([
                 gen.Statement(f'case Opcodes.opcode{to_camel_case(program)}:', ending=''),
@@ -507,17 +511,17 @@ class LangGenerator(generator.Generator):
         self.marshal_cls.methods.append(method)
 
         # Opcodes enum
-        opcodes = gen.Class('Opcodes', csharp_style=True)
+        opcodes = gen.Class('Opcodes', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         for program in self.programs.values():
             program_name = program.name.eval()
             name = f'opcode{to_camel_case(program_name)}'
 
             opcodes.attributes.append(
                 gen.Attribute(
-                    'Short', 
+                    'short', 
                     f'{name: <24}', 
                     f'0x{self.opcodes[program_name]}',
-                    ['static', 'const'],
+                    ['static', 'final'],
                     visibility=gen.Visibility.PUBLIC,
                 )
             )
@@ -559,7 +563,8 @@ class LangGenerator(generator.Generator):
             # Attribute
             queue_base = queue.base.subtype.eval()
             queue_packer = 'ImmediatePacker'
-            queue_packer_template = f''
+            queue_packer_template = f', Packet'
+            queue_packer_args = ''
 
             if queue.specifier.queue_type == boxes.QueueSpecifierType.SPECIALIZED:
                 queue_packer = to_camel_case(queue.specifier.args.eval())
@@ -567,17 +572,21 @@ class LangGenerator(generator.Generator):
             elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
                 queue_packer = 'UniqueMergePacker'
                 args = queue.specifier.args
-                queue_packer_template = f'<{args[0].eval()}, {args[1].eval()}, {args[2].eval()}>'
+                global_dtype = to_camel_case(args[0].eval())
+                program_name = args[2].eval()
+                data_dtype = to_camel_case(args[1].eval())
+
+                queue_packer_template = f'<{global_dtype}, {data_dtype}>, {data_dtype}'
+                queue_packer_args = f'{global_dtype}.class, Opcodes.opcode{to_camel_case(progam_name)}'
 
             queue_packer = queue_packer + queue_packer_template
-            # TODO(gpascualg): Forward queue arguments
-            # if queue.base.argument is not None:
-            #     queue_packer = f'{queue_packer}, {queue.base.argument.eval()}'
+            if queue.base.argument is not None:
+                queue_packer_args = queue.base.argument.eval()
 
             queue_qualified_name = f'{to_camel_case(queue_base)}<{queue_packer}>'
 
             constructor.append(
-                gen.Statement(f'{to_camel_case(queue_name, False)} = new {queue_qualified_name}({queue_packer}.class)')
+                gen.Statement(f'{to_camel_case(queue_name, False)} = new {queue_qualified_name}(new {queue_packer}({queue_packer_args}))')
             )
 
             queues.attributes.append(gen.Attribute(
@@ -585,50 +594,99 @@ class LangGenerator(generator.Generator):
                 f'{to_camel_case(queue_name, False)}'
             ))
 
-            # # General send with data
-            # if self.can_queue_have_callback(queue):
-            #     send = gen.Method('void', f'send_{queue_name}', [
-            #         gen.Variable('::kumo::opcode', 'opcode'),
-            #         gen.Variable(f'D&&', 'data'),
-            #         gen.Variable('T&&', 'callback')
-            #     ], template=gen.Statement('template <typename D, typename T>', ending=''), visibility=gen.Visibility.PUBLIC)
-            #     send.append(gen.Statement(f'_{queue_name}.add(opcode, std::forward<D>(data), std::forward<T>(callback))'))
-            # else:
-            #     send = gen.Method('void', f'send_{queue_name}', [
-            #         gen.Variable('::kumo::opcode', 'opcode'),
-            #         gen.Variable(f'D&&', 'data')
-            #     ], template=gen.Statement('template <typename D>', ending=''), visibility=gen.Visibility.PUBLIC)
-            #     send.append(gen.Statement(f'_{queue_name}.add(opcode, std::forward<D>(data))'))
+            # General send with data
+            if self.can_queue_have_callback(queue):
+                send = gen.Method('void', f'send{to_camel_case(queue_name)}', [
+                    gen.Variable('Short', 'opcode'),
+                    gen.Variable(f'IData', 'data'),
+                    gen.Variable('IAckCallback', 'callback')
+                ], visibility=gen.Visibility.PUBLIC)
+                send.append(gen.Statement(f'{to_camel_case(queue_name, False)}.add(opcode, data, callback)'))
+                queues.methods.append(send)
+            
+            send = gen.Method('void', f'send{to_camel_case(queue_name)}', [
+                gen.Variable('Short', 'opcode'),
+                gen.Variable(f'IData', 'data')
+            ], visibility=gen.Visibility.PUBLIC)
+            send.append(gen.Statement(f'{to_camel_case(queue_name, False)}.add(opcode, data)'))
+            queues.methods.append(send)
 
-            # queues.methods.append(send)
-
-            # if self.has_queue_packed_add(queue):
-            #     send = gen.Method('void', f'send_{queue_name}', [
-            #         gen.Variable('const boost::intrusive_ptr<::kaminari::packet>&', 'packet')
-            #     ], visibility=gen.Visibility.PUBLIC)
-            #     send.append(gen.Statement(f'_{queue_name}.add(packet)'))
-            #     queues.methods.append(send)
+            if self.has_queue_packed_add(queue):
+                send = gen.Method('void', f'send{to_camel_case(queue_name)}', [
+                    gen.Variable('Packet', 'packet')
+                ], visibility=gen.Visibility.PUBLIC)
+                send.append(gen.Statement(f'{to_camel_case(queue_name, False)}.add(packet)'))
+                queues.methods.append(send)
 
     def dump(self, path):
-        package = self.config.get('package', 'kumo')
+        package = self.config['package'] + '.kumo'
+        kaminari = self.config['kaminari']
+        path = os.path.join(path.replace('\\', '/'), package.replace('.', '/'))
 
-        # Do we need to include marshal base class?
-        marshal_include = []
+        try:
+            os.mkdir(path)
+        except:
+            pass
+
+        try:
+            os.mkdir(os.path.join(path, 'structs'))
+        except:
+            pass
 
         with open(f'{path}/Marshal.java', 'w') as fp:
-            fp.write(self.marshal_file.source())
+            fp.write(self.marshal_file.source([
+                gen.Statement(f'package {package}'),
+                *[
+                    gen.Statement(f'import {package}.structs.{name}') for name in self.all_structs.keys()
+                ],
+                gen.Statement(f'import {kaminari}.Packet'),
+                gen.Statement(f'import {kaminari}.PacketReader'),
+                gen.Statement(f'import {kaminari}.IMarshal'),
+                gen.Statement(f'import {kaminari}.IClient')
+            ]))
 
         with open(f'{path}/Rpc.java', 'w') as fp:
-            fp.write(self.rpc_file.source())
+            fp.write(self.rpc_file.source([
+                gen.Statement(f'package {package}'),
+                gen.Statement(f'import {kaminari}.IAckCallback'),
+                gen.Statement(f'import {kaminari}.IBroadcaster'),
+                gen.Statement(f'import {kaminari}.IBroadcastOperation')
+            ]))
 
-        with open(f'{path}/Structs.java', 'w') as fp:
-            fp.write(self.structs_file.source())
+        for struct_name, struct in self.all_structs.items():
+            with open(f'{path}/structs/{struct_name}.java', 'w') as fp:
+                structs_file = File()
+                structs_file.add(struct)
+
+                fp.write(structs_file.source([
+                    gen.Statement(f'package {package}.structs'),
+                    gen.Statement(f'import java.util.ArrayList'),
+                    gen.Statement(f'import java.util.TreeMap'),
+                    gen.Statement(f'import {kaminari}.Packet'),
+                    gen.Statement(f'import {kaminari}.PacketReader'),
+                    gen.Statement(f'import {kaminari}.Optional'),
+                    gen.Statement(f'import {kaminari}.IMarshal'),
+                    gen.Statement(f'import {kaminari}.packers.IData'),
+                    gen.Statement(f'import {kaminari}.packers.IHasId'),
+                    gen.Statement(f'import {kaminari}.packers.IHasDataVector')
+                ]))
 
         with open(f'{path}/Opcodes.java', 'w') as fp:
-            fp.write(self.opcodes_file.source())
+            fp.write(self.opcodes_file.source([
+                gen.Statement(f'package {package}')
+            ]))
 
         with open(f'{path}/ProtocolQueues.java', 'w') as fp:
-            fp.write(self.queues_file.source())
-
-
-        
+            fp.write(self.queues_file.source([
+                gen.Statement(f'package {package}'),
+                gen.Statement(f'import java.util.ArrayList'),
+                gen.Statement(f'import java.util.TreeMap'),
+                gen.Statement(f'import {kaminari}.Constants'),
+                gen.Statement(f'import {kaminari}.IAckCallback'),
+                gen.Statement(f'import {kaminari}.Overflow'),
+                gen.Statement(f'import {kaminari}.Packet'),
+                gen.Statement(f'import {kaminari}.Ref'),
+                gen.Statement(f'import {kaminari}.queues.ReliableQueue'),
+                gen.Statement(f'import {kaminari}.queues.UnreliableQueue'),
+                gen.Statement(f'import {kaminari}.queues.EventuallySyncedQueue')
+            ]))

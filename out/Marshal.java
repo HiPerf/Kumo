@@ -1,3 +1,4 @@
+package net.lostsocket.lostsouls.engine.net.kumo;
 class Marshal extends IMarshal
 {
     public int sizeofHasId()

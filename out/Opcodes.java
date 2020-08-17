@@ -1,3 +1,4 @@
+package net.lostsocket.lostsouls.engine.net.kumo;
 class Opcodes
 {
     public static const Short opcodeDoSth              = 0x71bb;

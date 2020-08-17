@@ -1,3 +1,7 @@
+package net.lostsocket.lostsouls.engine.net.kumo;
+import net.lostsocket.lostsouls.engine.net.IAckCallback;
+import net.lostsocket.lostsouls.engine.net.IBroadcaster;
+import net.lostsocket.lostsouls.engine.net.IBroadcastOperation;
 class Rpc
 {
     public void sendMove(ProtocolQueues pq, Movement data, IAckCallback callback)

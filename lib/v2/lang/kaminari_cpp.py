@@ -537,7 +537,9 @@ class LangGenerator(generator.Generator):
             elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
                 queue_packer = 'unique_merge_packer'
                 args = queue.specifier.args
-                queue_packer_template = f'<{args[0].eval()}, {args[1].eval()}, {args[2].eval()}, ::kumo::marshal, {queue_name.capitalize()}Allocator>'
+                program_name = args[2].eval()
+
+                queue_packer_template = f'<{args[0].eval()}, {args[1].eval()}, ::kumo::opcode::{program_name}, ::kumo::marshal, {queue_name.capitalize()}Allocator>'
 
             queue_packer = queue_packer + queue_packer_template
             if queue.base.argument is not None:

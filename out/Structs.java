@@ -1,3 +1,9 @@
+package net.lostsocket.lostsouls.engine.net.kumo;
+import java.util.ArrayList;
+import java.util.TreeMap;
+import net.lostsocket.lostsouls.engine.net.IData;
+import net.lostsocket.lostsouls.engine.net.IHasId;
+import net.lostsocket.lostsouls.engine.net.IHasDataVector;
 class Complex extends IData
 {
     public void pack(IMarshal marshal, Packet packet)
