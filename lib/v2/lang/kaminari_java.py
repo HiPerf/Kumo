@@ -123,6 +123,7 @@ class LangGenerator(generator.Generator):
     def __read_type(self, decl, variable, is_optional=False):
         dtype = decl.dtype.dtype.eval()
         if dtype == 'vector':
+            varname = decl.name.eval()
             inner = decl.dtype.spec.eval()
 
             if not self.is_message(inner):
@@ -136,13 +137,13 @@ class LangGenerator(generator.Generator):
                     get_value = variable
 
                 return gen.Scope([
-                    gen.Statement(f'int size = Byte.toUnsignedInt(packet.getData().readByte())'),
-                    gen.Statement(f'if (packet.bytesRead() + size * marshal.size({ctype}.class) >= packet.bufferSize())', ending=''),
+                    gen.Statement(f'int size_{varname} = Byte.toUnsignedInt(packet.getData().readByte())'),
+                    gen.Statement(f'if (packet.bytesRead() + size_{varname} * marshal.size({ctype}.class) >= packet.bufferSize())', ending=''),
                     gen.Block([
                         gen.Statement('return false')
                     ]),
                     gen.Statement(set_value),
-                    gen.Statement(f'for (int i = 0; i < size; ++i)', ending=''),
+                    gen.Statement(f'for (int i = 0; i < size_{varname}; ++i)', ending=''),
                     gen.Block([
                         gen.Statement(f'{get_value}.add(packet.getData().read{TYPE_CONVERSION[inner]}())')
                     ])
@@ -159,9 +160,9 @@ class LangGenerator(generator.Generator):
                     get_value = variable
                 
                 return gen.Scope([
-                    gen.Statement(f'int size = Byte.toUnsignedInt(packet.getData().readByte())'),
+                    gen.Statement(f'int size_{varname} = Byte.toUnsignedInt(packet.getData().readByte())'),
                     gen.Statement(set_value),
-                    gen.Statement(f'for (int i = 0; i < size; ++i)', ending=''),
+                    gen.Statement(f'for (int i = 0; i < size_{varname}; ++i)', ending=''),
                     gen.Block([
                         gen.Statement(f'{inner} data = new {inner}()'),
                         gen.Statement(f'if (data.unpack(marshal, packet))', ending=''),
@@ -323,6 +324,7 @@ class LangGenerator(generator.Generator):
             else:
                 method.append(self.__read_type(decl, f'this.{name}'))
     
+        method.append(gen.Statement('return true'))
         struct.methods.append(method)
 
     def __generate_message_size(self, message: boxes.MessageBox, struct: gen.Class):
@@ -572,7 +574,7 @@ class LangGenerator(generator.Generator):
         self.opcodes_file.add(opcodes)
 
         # Protocol queues
-        queues = gen.Class('ProtocolQueues', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
+        queues = gen.Class('ProtocolQueues implements IProtocolQueues', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.queues_file.add(queues)
         
         constructor = gen.Method('', 'ProtocolQueues', [
@@ -732,6 +734,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'import {kaminari}.IAckCallback'),
                 gen.Statement(f'import {kaminari}.NoCallback'),
                 gen.Statement(f'import {kaminari}.IMarshal'),
+                gen.Statement(f'import {kaminari}.IProtocolQueues'),
                 gen.Statement(f'import {kaminari}.packers.IData'),
                 gen.Statement(f'import {kaminari}.Overflow'),
                 gen.Statement(f'import {kaminari}.Packet'),
