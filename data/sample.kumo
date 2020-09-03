@@ -1,7 +1,8 @@
-message has_id
-{
-	int64 id;
-}
+# The struct has_id is automatically declared
+#message has_id
+#{
+#	int64 id;
+#}
 
 message spawn_data : has_id
 {

@@ -20,6 +20,7 @@ class Generator(object):
         # Generated data
         self.opcodes = {}
         self.structures = {}
+        self.base_structures = {}
         self.message_packer = {}
         self.message_unpacker = {}
         self.message_size = {}
@@ -28,7 +29,13 @@ class Generator(object):
         self.send_list = []
 
     # To be implemented by specific language generators
+    def _base_message_fields(self, base):
+        raise NotImplementedError()
+
     def _generate_structure(self, message):
+        raise NotImplementedError()
+
+    def _generate_base_structure(self, base):
         raise NotImplementedError()
 
     def _generate_message_packer(self, message):
@@ -83,7 +90,11 @@ class Generator(object):
         fields = message.fields.eval()
 
         if message.base.name is not None:
-            return self.message_fields_including_base(self.messages[message.base.name.eval()]) + fields
+            base = message.base.name.eval()
+            if self.is_message(base):
+                return self.message_fields_including_base(self.messages[base]) + fields
+            else:
+                return self._base_message_fields(base) + fields
 
         return fields
 
@@ -114,17 +125,43 @@ class Generator(object):
         args = program.args.eval()
         return args[0]
 
+    def message_inherits_from(self, message, inherits):
+        if message.name.eval() == inherits:
+            return True
+
+        if message.base.name is not None:
+            base = message.base.name.eval()
+            # Check here again, not all of them are custom types
+            if base == inherits:
+                return True
+
+            if self.is_message(base):
+                return self.message_inherits_from(self.messages[base], inherits)
+
+        return False
+
     def generate_structure(self, message):
         message_name = message.name.eval()
         if message_name in self.structures:
             return self.structures[message_name]
 
         if message.base.name is not None:
-            self.generate_structure(self.messages[message.base.name.eval()])
+            base = message.base.name.eval()
+            if self.is_message(base):
+                self.generate_structure(self.messages[base])
+            else:
+                self.generate_base_structure(base)
+                assert base == 'has_id', 'Invalid base class'
         
         struct = self._generate_structure(message)
         self.structures[message_name] = struct
         return struct
+
+    def generate_base_structure(self, base: str):
+        if base in self.base_structures:
+            return self.base_structures[base]
+
+        self.base_structures[base] = self._generate_base_structure(base)
     
     def generate_message_packer(self, message):
         message_name = message.name.eval()

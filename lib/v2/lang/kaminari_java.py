@@ -5,6 +5,8 @@ from .. import semantic
 
 import os
 import sys
+import itertools as it
+import shutil
 
 
 TYPE_CONVERSION = {
@@ -63,7 +65,7 @@ class LangGenerator(generator.Generator):
         self.all_structs = {}
 
         # Flush marshal class already
-        self.marshal_cls = gen.Class('Marshal implements IMarshal', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
+        self.marshal_cls = gen.Class('Marshal implements IMarshal, IHandlePacket', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.marshal_cls.attributes.append(
             gen.Attribute('Marshal', 'instance', decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
         )
@@ -73,6 +75,12 @@ class LangGenerator(generator.Generator):
         self.rpc_cls = gen.Class('Rpc', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.rpc_file.add(self.rpc_cls)
 
+    def _base_message_fields(self, base):
+        if base == 'has_id':
+            return [
+                boxes.DeclarationBox(boxes.TypeBox(boxes.IdentifierBox('uint64')), boxes.IdentifierBox('id'), False)
+            ]
+        return []
 
     def __is_trivial(self, message: boxes.MessageBox):
         for decl in self.message_fields_including_base(message):
@@ -209,6 +217,37 @@ class LangGenerator(generator.Generator):
             gen.Statement(set_value)
         ])
 
+    def __read_type_unsafe(self, decl, variable, is_optional=False):
+        dtype = decl.dtype.dtype.eval()
+        if dtype == 'vector':
+            raise NotImplementedError('Unsafe reading cannot read vectors')
+
+        if self.is_message(dtype):
+            dtype = to_camel_case(dtype)
+
+            set_value = f'new {dtype}()'
+            if is_optional:
+                set_value = f'{variable}.setValue({set_value})'
+            else:
+                set_value = f'{variable} = {set_value}'
+
+            return gen.Scope([
+                gen.Statement(set_value),
+                gen.Statement(f'{variable}.unpack(marshal, packet)', ending='')
+            ])
+
+
+        ctype = TYPE_CONVERSION[dtype]
+        set_value = f'packet.getData().read{ctype}()'
+        if is_optional:
+            set_value = f'{variable}.setValue({set_value})'
+        else:
+            set_value = f'{variable} = {set_value}'
+            
+        return gen.Scope([
+            gen.Statement(set_value)
+        ])
+    
     def __write_size(self, this, decl, variable):
         dtype = decl.dtype.dtype.eval()
         if dtype == 'vector':
@@ -244,12 +283,19 @@ class LangGenerator(generator.Generator):
     def _generate_structure(self, message: boxes.MessageBox):
         message_name = message.name.eval()
 
+        base_name = None
         base = ' implements IData'
         if message.base.name is not None:
-            base = f' extends {message.base.name.eval()}'
+            base_name = message.base.name.eval()
+
+            # TODO(gpascualg): This is not really elegant
+            if base_name == 'has_id':
+                base = f' implements IHasId'
+            else:
+                base = f' extends {to_camel_case(base_name)}'
 
         struct = gen.Class(to_camel_case(message_name), decl_name_base=base, csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
-        for decl in message.fields.eval():
+        for decl in it.chain(self._base_message_fields(base_name), message.fields.eval()) :
             dtype = decl.dtype.dtype.eval()
             ctype = '{}'
             if decl.optional:
@@ -274,9 +320,28 @@ class LangGenerator(generator.Generator):
             ))
 
         self.all_structs[to_camel_case(message_name)] = struct
+        self.__generate_base_methods(struct, base_name)
         self.__generate_message_packer(message, struct)
         self.__generate_message_unpacker(message, struct)
         self.__generate_message_size(message, struct)
+
+    # Java doesn't generate base structures but implements them in the same struct
+    def _generate_base_structure(self, base):
+        pass
+
+    def __generate_base_methods(self, struct: gen.Class, base_name: str):
+        if base_name != 'has_id':
+            return
+
+        method = gen.Method('Long', f'getId', [], visibility=gen.Visibility.PUBLIC)
+        method.append(gen.Statement('return id'))
+        struct.methods.append(method)
+
+        method = gen.Method('void', f'setId', [
+            gen.Variable('Long', 'id')
+        ], visibility=gen.Visibility.PUBLIC)
+        method.append(gen.Statement('this.id = id'))
+        struct.methods.append(method)
 
     def __generate_message_packer(self, message: boxes.MessageBox, struct: gen.Class):
         message_name = message.name.eval()
@@ -308,21 +373,31 @@ class LangGenerator(generator.Generator):
             gen.Variable('PacketReader', 'packet')
         ], visibility=gen.Visibility.PUBLIC)
 
-        for decl in self.message_fields_including_base(message):
-            name = decl.name.eval()
+        if self.__is_trivial(message):
+            method.append(gen.Statement(f'if (packet.bytesRead() + this.size(marshal) >= packet.bufferSize())', ending=''))
+            method.append(gen.Block([
+                gen.Statement('return false')
+            ]))
 
-            if decl.optional:
-                method.append(gen.Statement(f'if (packet.bytesRead() + Byte.BYTES >= packet.bufferSize())', ending=''))
-                method.append(gen.Block([
-                    gen.Statement('return false')
-                ]))
-                
-                method.append(gen.Statement(f'if (packet.getData().readByte() == 1)', ending=''))
-                method.append(gen.Block([
-                    self.__read_type(decl, f'this.{name}', True)
-                ]))
-            else:
-                method.append(self.__read_type(decl, f'this.{name}'))
+            for decl in self.message_fields_including_base(message):
+                name = decl.name.eval()
+                method.append(self.__read_type_unsafe(decl, f'this.{name}'))
+        else:
+            for decl in self.message_fields_including_base(message):
+                name = decl.name.eval()
+
+                if decl.optional:
+                    method.append(gen.Statement(f'if (packet.bytesRead() + Byte.BYTES >= packet.bufferSize())', ending=''))
+                    method.append(gen.Block([
+                        gen.Statement('return false')
+                    ]))
+                    
+                    method.append(gen.Statement(f'if (packet.getData().readByte() == 1)', ending=''))
+                    method.append(gen.Block([
+                        self.__read_type(decl, f'this.{name}', True)
+                    ]))
+                else:
+                    method.append(self.__read_type(decl, f'this.{name}'))
     
         method.append(gen.Statement('return true'))
         struct.methods.append(method)
@@ -486,7 +561,7 @@ class LangGenerator(generator.Generator):
                 false_case = 'client.handleClientError'
 
             #method.append(gen.Statement(f'if (client->{attr}() != {attr}::{value})', ending=''))
-            method.append(gen.Statement(f'if (!clint.check(client, "{attr}", {value}))', ending=''))
+            method.append(gen.Statement(f'if (!client.check(client, "{attr}", {value}))', ending=''))
             method.append(gen.Block([
                 gen.Statement(f'return {false_case}(client, packet.getOpcode())')
             ]))
@@ -669,14 +744,12 @@ class LangGenerator(generator.Generator):
         path = os.path.join(path.replace('\\', '/'), package.replace('.', '/'))
 
         try:
-            os.mkdir(path)
+            shutil.rmtree(path)
         except:
             pass
 
-        try:
-            os.mkdir(os.path.join(path, 'structs'))
-        except:
-            pass
+        os.mkdir(path)
+        os.mkdir(os.path.join(path, 'structs'))
 
         with open(f'{path}/Marshal.java', 'w') as fp:
             fp.write(self.marshal_file.source([
@@ -687,7 +760,8 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'import {kaminari}.Packet'),
                 gen.Statement(f'import {kaminari}.PacketReader'),
                 gen.Statement(f'import {kaminari}.IMarshal'),
-                gen.Statement(f'import {kaminari}.IClient')
+                gen.Statement(f'import {kaminari}.IClient'),
+                gen.Statement(f'import {kaminari}.IHandlePacket')
             ]))
 
         with open(f'{path}/Rpc.java', 'w') as fp:

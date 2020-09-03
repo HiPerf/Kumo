@@ -75,6 +75,12 @@ class LangGenerator(generator.Generator):
         self.marshal_cls = gen.Class('marshal', decl_name_base=base_name, cpp_style=True)
         self.marshal_file.add(self.marshal_cls)
 
+    def _base_message_fields(self, base):
+        if base == 'has_id':
+            return [
+                boxes.DeclarationBox(boxes.TypeBox(boxes.IdentifierBox('uint64')), boxes.IdentifierBox('id'), False)
+            ]
+        return []
 
     def __is_trivial(self, message: boxes.MessageBox):
         for decl in self.message_fields_including_base(message):
@@ -229,6 +235,20 @@ class LangGenerator(generator.Generator):
             ))
 
         self.structs_file.add(struct)
+
+    def _generate_base_structure(self, base):
+        if base != 'has_id':
+            return
+        
+        struct = gen.Class(base, cpp_style=True, keyword='struct')
+        struct.attributes.append(gen.Attribute(
+            'uint64_t',
+            'id',
+            visibility=gen.Visibility.PUBLIC
+        ))
+
+        self.structs_file.add(struct)
+        return struct
 
     def _generate_message_packer(self, message: boxes.MessageBox):
         message_name = message.name.eval()

@@ -23,7 +23,7 @@ class IntBox(BaseBox):
 
 class IdentifierBox(BaseBox):
     def __init__(self, value):
-        self.value = value.getstr()
+        self.value = value if isinstance(value, str) else value.getstr()
 
     def eval(self):
         return self.value
