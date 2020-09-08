@@ -56,6 +56,7 @@ class LangGenerator(generator.Generator):
 
         # Output code
         self.marshal_file = File()
+        self.client_file = File()
         self.opcodes_file = File()
         self.rpc_file = File()
         self.queues_file = File()
@@ -70,6 +71,10 @@ class LangGenerator(generator.Generator):
             gen.Attribute('Marshal', 'instance', decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
         )
         self.marshal_file.add(self.marshal_cls)
+
+        # Flush IClient 
+        self.client_itf = gen.Class('IClient extends IBaseClient', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], keyword='interface')
+        self.client_file.add(self.client_itf)
 
         # RPC class
         self.rpc_cls = gen.Class('Rpc', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
@@ -572,7 +577,7 @@ class LangGenerator(generator.Generator):
             gen.Statement('return false')
         ]))
 
-        method.append(gen.Statement(f'return client.on{to_camel_case(program_name)}(client, data, packet.timestamp())'))
+        method.append(gen.Statement(f'return client.on{to_camel_case(program_name)}(data, packet.timestamp())'))
 
         self.handler_programs.add(program_name)
         self.marshal_cls.methods.append(method)
@@ -608,9 +613,9 @@ class LangGenerator(generator.Generator):
         method.append(gen.Statement('return 0'))
 
         # General packet handler
-        method = gen.Method('boolean', 'handlePacket', [
+        method = gen.Method('<T extends IBaseClient> boolean', 'handlePacket', [
             gen.Variable('PacketReader', 'packet'),
-            gen.Variable('IClient', 'client')
+            gen.Variable('T', 'client')
         ], visibility=gen.Visibility.PUBLIC)
 
         method.append(gen.Statement('switch (packet.getOpcode())', ending=''))
@@ -618,7 +623,7 @@ class LangGenerator(generator.Generator):
             gen.Scope([
                 gen.Statement(f'case Opcodes.opcode{to_camel_case(program)}:', ending=''),
                 gen.Scope([
-                    gen.Statement(f'return handle{to_camel_case(program)}(this, packet, client)') 
+                    gen.Statement(f'return handle{to_camel_case(program)}(this, packet, (IClient)client)') 
                 ], indent=True)
             ]) for program in self.handler_programs
         ] + [gen.Scope([
@@ -629,6 +634,21 @@ class LangGenerator(generator.Generator):
         ])]))
 
         self.marshal_cls.methods.append(method)
+
+        # IClient
+        for program_name in self.handler_programs:
+            program = self.programs[program_name]
+            message = self.get_program_message(program)
+            self.client_itf.methods.append(gen.Method(
+                'boolean', 
+                f'on{to_camel_case(program_name)}',
+                [
+                    gen.Variable(to_camel_case(message), 'data'), 
+                    gen.Variable('long', 'timestamp')
+                ],
+                visibility=gen.Visibility.PUBLIC,
+                interface=True
+            ))
 
         # Opcodes enum
         opcodes = gen.Class('Opcodes', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
@@ -751,16 +771,26 @@ class LangGenerator(generator.Generator):
         os.mkdir(path)
         os.mkdir(os.path.join(path, 'structs'))
 
+        with open(f'{path}/IClient.java', 'w') as fp:
+            fp.write(self.client_file.source([
+                gen.Statement(f'package {package}'),
+                *[
+                    gen.Statement(f'import {package}.structs.{name}') for name in self.all_structs.keys()
+                ],
+                gen.Statement(f'import {kaminari}.IBaseClient')
+            ]))
+
         with open(f'{path}/Marshal.java', 'w') as fp:
             fp.write(self.marshal_file.source([
                 gen.Statement(f'package {package}'),
                 *[
                     gen.Statement(f'import {package}.structs.{name}') for name in self.all_structs.keys()
                 ],
+                gen.Statement(f'import {package}.IClient'),
                 gen.Statement(f'import {kaminari}.Packet'),
                 gen.Statement(f'import {kaminari}.PacketReader'),
                 gen.Statement(f'import {kaminari}.IMarshal'),
-                gen.Statement(f'import {kaminari}.IClient'),
+                gen.Statement(f'import {kaminari}.IBaseClient'),
                 gen.Statement(f'import {kaminari}.IHandlePacket')
             ]))
 

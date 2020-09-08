@@ -108,7 +108,7 @@ class Variable(object):
         return self.decl(eval_fn=eval_fn)
 
 class Method(Block):
-    def __init__(self, dtype, name, parameters = [], decl_modifiers = [], visibility=Visibility.PRIVATE, template=None):
+    def __init__(self, dtype, name, parameters = [], decl_modifiers = [], visibility=Visibility.PRIVATE, template=None, interface=False):
         super().__init__()
 
         self.dtype = dtype
@@ -117,6 +117,7 @@ class Method(Block):
         self.decl_modifiers = decl_modifiers
         self.visibility = visibility
         self.template = template
+        self.interface = interface
 
     @check_eval_fn
     def decl(self, level, modifiers=[], eval_fn=None):
@@ -140,7 +141,10 @@ class Method(Block):
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
         parameters = ', '.join(x.both(eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
+        postfix = postfix if not self.interface else ';'
         fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters}){postfix}\n', level)
+        if self.interface:
+            return fnc
         return fnc + super().both(level, eval_fn=eval_fn)
 
 class Constructor(Method):
