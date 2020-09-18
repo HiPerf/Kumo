@@ -14,7 +14,7 @@ TYPE_CONVERSION = {
     'uint16':   'Short',
     'uint32':   'Integer',
     'uint64':   'Long',
-    'int8':     'Character',
+    'int8':     'Byte',
     'int16':    'Short',
     'int32':    'Integer',
     'int64':    'Long',
@@ -151,7 +151,7 @@ class LangGenerator(generator.Generator):
 
                 return gen.Scope([
                     gen.Statement(f'int size_{varname} = Byte.toUnsignedInt(packet.getData().readByte())'),
-                    gen.Statement(f'if (packet.bytesRead() + size_{varname} * marshal.size({ctype}.class) >= packet.bufferSize())', ending=''),
+                    gen.Statement(f'if (packet.bytesRead() + size_{varname} * marshal.size({ctype}.class) > packet.bufferSize())', ending=''),
                     gen.Block([
                         gen.Statement('return false')
                     ]),
@@ -215,7 +215,7 @@ class LangGenerator(generator.Generator):
             set_value = f'{variable} = {set_value}'
             
         return gen.Scope([
-            gen.Statement(f'if (packet.bytesRead() + marshal.size({ctype}.class) >= packet.bufferSize())', ending=''),
+            gen.Statement(f'if (packet.bytesRead() + marshal.size({ctype}.class) > packet.bufferSize())', ending=''),
             gen.Block([
                 gen.Statement('return false')
             ]),
@@ -379,7 +379,7 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PUBLIC)
 
         if self.__is_trivial(message):
-            method.append(gen.Statement(f'if (packet.bytesRead() + this.size(marshal) >= packet.bufferSize())', ending=''))
+            method.append(gen.Statement(f'if (packet.bytesRead() + this.size(marshal) > packet.bufferSize())', ending=''))
             method.append(gen.Block([
                 gen.Statement('return false')
             ]))
@@ -392,7 +392,7 @@ class LangGenerator(generator.Generator):
                 name = decl.name.eval()
 
                 if decl.optional:
-                    method.append(gen.Statement(f'if (packet.bytesRead() + Byte.BYTES >= packet.bufferSize())', ending=''))
+                    method.append(gen.Statement(f'if (packet.bytesRead() + Byte.BYTES > packet.bufferSize())', ending=''))
                     method.append(gen.Block([
                         gen.Statement('return false')
                     ]))
@@ -464,7 +464,7 @@ class LangGenerator(generator.Generator):
                 gen.Variable(f'ProtocolQueues', 'pq'),
                 gen.Variable(f'{message_name}', 'data'),
                 gen.Variable('IAckCallback', 'callback')
-            ], visibility=gen.Visibility.PUBLIC)
+            ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
             method.append(gen.Statement(f'pq.send{to_camel_case(queue)}(Opcodes.opcode{to_camel_case(program_name)}, data, callback)'))
             methods.append(method)
         
@@ -472,7 +472,7 @@ class LangGenerator(generator.Generator):
         method = gen.Method('void', f'send{to_camel_case(program_name)}', [
             gen.Variable(f'ProtocolQueues', 'pq'),
             gen.Variable(f'{message_name}', 'data')
-        ], visibility=gen.Visibility.PUBLIC)
+        ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
         method.append(gen.Statement(f'pq.send{to_camel_case(queue)}(Opcodes.opcode{to_camel_case(program_name)}, data)'))
         methods.append(method)
         
@@ -486,7 +486,7 @@ class LangGenerator(generator.Generator):
                         gen.Variable('IBroadcaster<ProtocolQueues>', 'broadcaster'),
                         gen.Variable(f'{message_name}', 'data'),
                         gen.Variable('IAckCallback', 'callback')
-                    ], visibility=gen.Visibility.PUBLIC)
+                    ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
                     methods.append(method)
 
                     method.append(gen.Statement(f'Packet packet = Packet.make(Opcodes.opcode{to_camel_case(program_name)}, callback)'))
@@ -505,7 +505,7 @@ class LangGenerator(generator.Generator):
                 method = gen.Method('void', f'broadcast{to_camel_case(program_name)}{suffix}', [
                     gen.Variable('IBroadcaster<ProtocolQueues>', 'broadcaster'),
                     gen.Variable(f'{message_name}', 'data')
-                ], visibility=gen.Visibility.PUBLIC)
+                ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
                 methods.append(method)
 
                 method.append(gen.Statement(f'Packet packet = Packet.make(Opcodes.opcode{to_camel_case(program_name)})'))
@@ -526,7 +526,7 @@ class LangGenerator(generator.Generator):
                 method = gen.Method('void', f'broadcast{to_camel_case(program_name)}{suffix}', [
                     gen.Variable('IBroadcaster<ProtocolQueues>', 'broadcaster'),
                     gen.Variable(f'{message_name}', 'data')
-                ], visibility=gen.Visibility.PUBLIC)
+                ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
                 methods.append(method)
 
                 method.append(gen.Statement('broadcaster.broadcast(new IBroadcastOperation<ProtocolQueues>() {', ending=''))

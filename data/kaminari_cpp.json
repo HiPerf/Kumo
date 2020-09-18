@@ -1,6 +1,6 @@
 {
     "marshal": {
         "base": "handler",
-        "include": "server/handler.hpp"
+        "include": "core/handler.hpp"
     }
 }
