@@ -208,11 +208,12 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         base = ''
-        if message.base.name is not None:
-            base = f': public {message.base.name.eval()}'
+        # TODO(gpascualg): Check we don't really need this
+        #if message.base.name is not None:
+        #    base = f': public {message.base.name.eval()}'
 
         struct = gen.Class(message_name, decl_name_base=base, cpp_style=True, keyword='struct')
-        for decl in message.fields.eval():
+        for decl in self.message_fields_including_base(message):
             dtype = decl.dtype.dtype.eval()
             ctype = '{}'
             if decl.optional:
