@@ -387,7 +387,7 @@ class LangGenerator(generator.Generator):
                     ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
                     methods.append(method)
 
-                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(opcode::{program_name}, std::forward<T>(callback))'))
+                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make((uint16_t)opcode::{program_name}, std::forward<T>(callback))'))
                     method.append(gen.Statement(f'::kumo::marshal::pack(packet, data)'))
                     method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
@@ -399,7 +399,7 @@ class LangGenerator(generator.Generator):
                 ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
                 methods.append(method)
 
-                method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make(opcode::{program_name})'))
+                method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make((uint16_t)opcode::{program_name})'))
                 method.append(gen.Statement(f'::kumo::marshal::pack(packet, data)'))
                 method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                 method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
