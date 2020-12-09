@@ -8,17 +8,9 @@ import glob
 import json
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Generates network marshalling code.')
-    parser.add_argument('--role', help='Either server or client', required=True)
-    parser.add_argument('--dir', help='folder containing .kumo files', required=True)
-    parser.add_argument('--out', help='folder to output files', required=True)
-    parser.add_argument('--lang', help='Generator language', required=True)
-    parser.add_argument('--config', help='Path with options to the generator language', default=None)
-    args = parser.parse_args()
-
-    assert args.role in ('server', 'client'), f'Unexpected role {args.role}, must be server or client'
-    role = lib.generator.Role.SERVER if args.role == 'server' else lib.generator.Role.CLIENT
+def run_for(args_role, args_dir, args_out, args_lang, args_config):
+    assert args_role in ('server', 'client'), f'Unexpected role {args_role}, must be server or client'
+    role = lib.generator.Role.SERVER if args_role == 'server' else lib.generator.Role.CLIENT
 
     versioning = lib.versioning.Versioning()
     lexer = lib.lexer.lg.build()
@@ -27,7 +19,7 @@ def main():
     programs = {}
     queues = {}
 
-    path = os.path.realpath(args.dir)
+    path = os.path.realpath(args_dir)
     files = sorted(glob.glob(os.path.join(path, '*.kumo')))
     for file in files:
         with open(file) as fp:
@@ -73,19 +65,33 @@ def main():
 
     # Read config if any
     config = {}
-    if args.config:
-        with open(args.config) as fp:
+    if args_config:
+        with open(args_config) as fp:
             config = json.load(fp)
 
     # Chose generator based on language selected
     try:
-        LangModule = getattr(lib.lang, args.lang.replace('-', '_'))
+        LangModule = getattr(lib.lang, args_lang.replace('-', '_'))
         generator = LangModule.LangGenerator(config, role, queues, messages, programs)
     except:
-        raise NotImplementedError(f'Language {args.lang} is not yet supported')
+        raise NotImplementedError(f'Language {args_lang} is not yet supported')
 
     generator.generate(versioning.generate())
-    generator.dump(args.out)
+    generator.dump(args_out)
+
+def main():
+    parser = argparse.ArgumentParser(description='Generates network marshalling code.')
+    parser.add_argument('--role', help='Either server or client', required=True, action='append')
+    parser.add_argument('--dir', help='folder containing .kumo files', required=True, action='append')
+    parser.add_argument('--out', help='folder to output files', required=True, action='append')
+    parser.add_argument('--lang', help='Generator language', required=True, action='append')
+    parser.add_argument('--config', help='Path with options to the generator language', default=None, action='append')
+    args = parser.parse_args()
+
+    assert len(args.role) == len(args.dir) == len(args.out) == len(args.lang) == len(args.config), "All arguments must be provided the same amount of times"
+    
+    for args_role, args_dir, args_out, args_lang, args_config in zip(args.role, args.dir, args.out, args.lang, args.config):
+        run_for(args_role, args_dir, args_out, args_lang, args_config)
 
 
 if __name__ == '__main__':
