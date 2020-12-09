@@ -23,7 +23,8 @@ pg = ParserGenerator([
     "IDENTIFIER",
     "SEMICOLON",
     "COLON",
-    "COMMA"
+    "COMMA",
+    "DOT"
 ])
 
 @pg.production("main : main message")
@@ -70,7 +71,7 @@ def argument(p):
 def argument_single(p):
     return ArgumentBox(p[0])
 
-@pg.production("condition : IF identifier EQUALS identifier false_case")
+@pg.production("condition : IF identifier EQUALS complex false_case")
 def condition(p):
     return ConditionBox(p[1], p[3], p[4])
 
@@ -129,6 +130,26 @@ def queue_specifier_array(p):
 @pg.production("queue_specifier : ")
 def queue_specifier_standard(p):
     return QueueSpecifierBox(QueueSpecifierType.STANDARD, None)
+
+@pg.production("complex : identifier complex_postfix ")
+def complex(p):
+    return IdentifierBox(p[0].eval() + p[1].eval())
+
+@pg.production("complex : number ")
+def complex(p):
+    return IdentifierBox(p[0].eval())
+
+@pg.production("complex_postfix : DOT identifier complex_postfix ")
+def complex_postfix_iden(p):
+    return IdentifierBox('.' + p[1].eval() + p[2].eval())
+
+@pg.production("complex_postfix : COLON COLON identifier complex_postfix ")
+def complex_postfix_colon(p):
+    return IdentifierBox('::' + p[2].eval() + p[3].eval())
+
+@pg.production("complex_postfix :  ")
+def complex_postfix_empty(p):
+    return IdentifierBox('')
 
 @pg.production("type : identifier")
 def dtype(p): 

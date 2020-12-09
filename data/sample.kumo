@@ -25,4 +25,4 @@ message complex
 
 reliable s2c do_sth(complex);
 reliable s2c spawn(spawn_data);
-ordered c2s move(movement) if status == InWorld; # All if have by default 'else handler'
+ordered c2s move(movement) if status == IngameStatus::InWorld; # All if have by default 'else handler'

@@ -22,6 +22,7 @@ lg.add("IDENTIFIER", r"[a-zA-Z_][a-zA-Z_0-9]*")
 lg.add("SEMICOLON", r";")
 lg.add("COLON", r":")
 lg.add("COMMA", r",")
+lg.add("DOT", r".")
 lg.ignore(r"\s+")  # Ignore whitespace
 lg.ignore(r"#.*\n")  # Ignore comments
 
