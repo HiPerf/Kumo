@@ -2,15 +2,8 @@
 #include <inttypes.h>
 #include <boost/intrusive_ptr.hpp>
 #include <kumo/structs.hpp>
-#include "server/handler.hpp"
-namespace kaminari
-{
-    class packet_reader;
-}
-namespace kaminari
-{
-    class packet;
-}
+#include <kaminari/buffers/packet.hpp>
+#include <kaminari/buffers/packet_reader.hpp>
 namespace kumo
 {
     class marshal;
@@ -18,7 +11,7 @@ namespace kumo
 
 namespace kumo
 {
-    class marshal:public handler
+    class marshal
     {
     public:
         static void pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const complex& data);

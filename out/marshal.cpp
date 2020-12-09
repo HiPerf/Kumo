@@ -1,6 +1,5 @@
 #include <kumo/opcodes.hpp>
 #include <kumo/marshal.hpp>
-#include <kaminari/buffers/packet.hpp>
 #include <kaminari/buffers/packet_reader.hpp>
 namespace kumo
 {
@@ -61,9 +60,9 @@ namespace kumo
     }
     bool marshal::unpack(::kaminari::packet_reader* packet, movement& data)
     {
-        if (packet->bytes_read() + sizeof_int8() >= packet->buffer_size())
+        if (packet->bytes_read() + sizeof_int8() > packet->buffer_size())
         {
-            return false;;
+            return false;
         }
         data.direction = packet->read<int8_t>();
         return true;

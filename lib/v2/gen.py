@@ -93,19 +93,19 @@ class Variable(object):
         self.default = default
 
     @check_eval_fn
-    def decl(self, eval_fn=None):
+    def decl(self, level, eval_fn=None):
         if self.default is not None:
-            return f'{self.dtype} {self.name} = {self.default}'
+            return indent(f'{self.dtype} {self.name} = {self.default}', level)
 
-        return self.instance(eval_fn=eval_fn) 
+        return indent(self.instance(level, eval_fn=eval_fn), level)
 
     @check_eval_fn
-    def instance(self, eval_fn=None):
-        return f'{self.dtype} {self.name}'
+    def instance(self, level, eval_fn=None):
+        return indent(f'{self.dtype} {self.name}', level)
     
     @check_eval_fn
-    def both(self, eval_fn=None):
-        return self.decl(eval_fn=eval_fn)
+    def both(self, level, eval_fn=None):
+        return indent(self.decl(level, eval_fn=eval_fn), level)
 
 class Method(Block):
     def __init__(self, dtype, name, parameters = [], decl_modifiers = [], visibility=Visibility.PRIVATE, template=None, interface=False):
@@ -123,14 +123,14 @@ class Method(Block):
     def decl(self, level, modifiers=[], eval_fn=None):
         modifiers = modifiers + self.decl_modifiers
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
-        parameters = ', '.join(x.decl(eval_fn=eval_fn) for x in self.parameters)
+        parameters = ', '.join(x.decl(0, eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
         return template + indent(f'{modifiers}{self.dtype} {self.name}({parameters});\n', level)
 
     @check_eval_fn
     def instance(self, level, name_ns='', modifiers=[], postfix='', eval_fn=None):
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
-        parameters = ', '.join(x.instance(eval_fn=eval_fn) for x in self.parameters)
+        parameters = ', '.join(x.instance(0, eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
         fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters}){postfix}\n', level)
         return fnc + super().instance(level, eval_fn=eval_fn)
@@ -139,7 +139,7 @@ class Method(Block):
     def both(self, level, modifiers=[], name_ns='', postfix='', eval_fn=None):
         modifiers = modifiers + self.decl_modifiers
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
-        parameters = ', '.join(x.both(eval_fn=eval_fn) for x in self.parameters)
+        parameters = ', '.join(x.both(0, eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
         postfix = postfix if not self.interface else ';'
         fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters}){postfix}\n', level)

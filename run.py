@@ -1,3 +1,4 @@
+from platform import version
 import lib.v2 as lib
 
 import argparse
@@ -19,6 +20,7 @@ def main():
     assert args.role in ('server', 'client'), f'Unexpected role {args.role}, must be server or client'
     role = lib.generator.Role.SERVER if args.role == 'server' else lib.generator.Role.CLIENT
 
+    versioning = lib.versioning.Versioning()
     lexer = lib.lexer.lg.build()
     parser = lib.parser.pg.build()
     messages = {}
@@ -30,7 +32,9 @@ def main():
     for file in files:
         with open(file) as fp:
             print(f'Parsing file {file}')
-            mainbox = parser.parse(lexer.lex(fp.read()))
+            contents = fp.read()
+            versioning.digest_file(contents)
+            mainbox = parser.parse(lexer.lex(contents))
             for result in mainbox.eval():
                 name = result.name.eval()
                 
@@ -80,7 +84,7 @@ def main():
     except:
         raise NotImplementedError(f'Language {args.lang} is not yet supported')
 
-    generator.generate()
+    generator.generate(versioning.generate())
     generator.dump(args.out)
 
 

@@ -60,6 +60,7 @@ class LangGenerator(generator.Generator):
         self.opcodes_file = File()
         self.rpc_file = File()
         self.queues_file = File()
+        self.config_file = File()
 
         # Needs processing at the end
         self.trivial_messages = {}
@@ -757,6 +758,11 @@ class LangGenerator(generator.Generator):
                 ], visibility=gen.Visibility.PUBLIC)
                 send.append(gen.Statement(f'{to_camel_case(queue_name, False)}.add(packet)'))
                 queues.methods.append(send)
+    
+    def _generate_version(self, version):
+        config = gen.Class('Config', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
+        config.attributes.append(gen.Attribute('Integer', 'VERSION', f'0x{version}', decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC))
+        self.config_file.add(config)
 
     def dump(self, path):
         package = self.config['package'] + '.kumo'
@@ -851,3 +857,9 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'import {kaminari}.packers.MergePacker'),
                 gen.Statement(f'import {kaminari}.packers.MostRecentPackerWithId')
             ]))
+
+        with open(f'{path}/Config.java', 'w') as fp:
+            fp.write(self.config_file.source([
+                gen.Statement(f'package {package}')
+            ]))
+        

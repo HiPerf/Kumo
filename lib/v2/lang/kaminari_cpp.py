@@ -68,6 +68,7 @@ class LangGenerator(generator.Generator):
         self.rpc_file = File(namespace='kumo')
         self.structs_file = File(namespace='kumo')
         self.queues_file = File(namespace='kumo')
+        self.config_file = File(namespace='kumo')
 
         # Flush marshal class already
         base_name = self.config.get('marshal', {}).get('base')
@@ -595,7 +596,10 @@ class LangGenerator(generator.Generator):
                 ], visibility=gen.Visibility.PUBLIC)
                 send.append(gen.Statement(f'_{queue_name}.add(packet)'))
                 queues.methods.append(send)
-        
+    
+    def _generate_version(self, version):
+        self.config_file.add(gen.Statement(f'constexpr inline uint32_t VERSION = 0x{version}'))
+
     def dump(self, path):
         def kaminari_fwd(code):
             if not isinstance(code, list):
@@ -683,5 +687,11 @@ class LangGenerator(generator.Generator):
                         gen.Statement('using packets_by_block = std::map<uint32_t, std::vector<boost::intrusive_ptr<packet>>>')
                     ])
                 ])
+            ]))
+
+        with open(f'{path}/config.hpp', 'w') as fp:
+            fp.write(self.config_file.source([
+                gen.Statement(f'#pragma once', ending=''),
+                gen.Statement(f'#include <inttypes.h>', ending='')
             ]))
         

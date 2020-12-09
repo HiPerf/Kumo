@@ -56,6 +56,9 @@ class Generator(object):
     def _generate_internals(self):
         pass
 
+    def _generate_version(self, version):
+        raise NotImplementedError()
+
     def dump(self, path):
         raise NotImplementedError()
 
@@ -227,8 +230,9 @@ class Generator(object):
         # Done
         self.generated_programs.append(program_name)
 
-    def generate(self):
+    def generate(self, version):
         for program in self.programs.values():
             self.generate_program(program)
 
         self._generate_internals()
+        self._generate_version(version)
