@@ -1,0 +1,4 @@
+message status
+{
+    bool success;
+}

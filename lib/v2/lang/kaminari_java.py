@@ -22,7 +22,8 @@ TYPE_CONVERSION = {
     'double':   'Double',
     'bool':     'Boolean',
     'vector':   'ArrayList',
-    'optional': 'Optional'
+    'optional': 'Optional',
+    'string': 'String'
 }
 
 def to_camel_case(snake_str, capitalize=True):
@@ -97,7 +98,7 @@ class LangGenerator(generator.Generator):
             dtype = decl.dtype.dtype.eval()
 
             # Vectors are runtime only
-            if dtype == 'vector':
+            if dtype in ('vector', 'string'):
                 return False
 
             # Including other messages might include optionals/vectors
@@ -207,8 +208,28 @@ class LangGenerator(generator.Generator):
                 ])
             ])
 
-
         ctype = TYPE_CONVERSION[dtype]
+
+        if dtype == 'string':
+            set_value = f'packet.getData().read{ctype}()'
+            if is_optional:
+                set_value = f'{variable}.setValue({set_value})'
+            else:
+                set_value = f'{variable} = {set_value}'
+            
+            return gen.Scope([
+                gen.Statement(f'if (packet.bytesRead() + marshal.size(Byte.class) > packet.bufferSize())', ending=''),
+                gen.Block([
+                    gen.Statement('return false')
+                ]),
+                gen.Statement(f'if (packet.bytesRead() + marshal.size(Byte.class) + packet.getData().peekByte() > packet.bufferSize())', ending=''),
+                gen.Block([
+                    gen.Statement('return false')
+                ]),
+                gen.Statement(set_value)
+            ])
+
+
         set_value = f'packet.getData().read{ctype}()'
         if is_optional:
             set_value = f'{variable}.setValue({set_value})'
@@ -225,7 +246,7 @@ class LangGenerator(generator.Generator):
 
     def __read_type_unsafe(self, decl, variable, is_optional=False):
         dtype = decl.dtype.dtype.eval()
-        if dtype == 'vector':
+        if dtype in ('vector', 'string'):
             raise NotImplementedError('Unsafe reading cannot read vectors')
 
         if self.is_message(dtype):
@@ -282,6 +303,8 @@ class LangGenerator(generator.Generator):
             
         elif self.is_message(dtype):
             return gen.Statement(f'size += {variable}.size({this})')
+        elif dtype == 'string':
+            return gen.Statement(f'size += {this}.size(Byte.class) + {variable}.length()')
         else:
             ctype = TYPE_CONVERSION[dtype]
             return gen.Statement(f'size += {this}.size({ctype}.class)')

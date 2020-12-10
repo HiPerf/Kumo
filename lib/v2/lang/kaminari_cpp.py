@@ -10,6 +10,7 @@ TYPE_CONVERSION = {
 }
 TYPE_CONVERSION['vector'] = 'std::vector'
 TYPE_CONVERSION['optional'] = 'std::optional'
+TYPE_CONVERSION['string'] = 'std::string'
 
 
 def if_template_or_inline(x):
@@ -91,8 +92,8 @@ class LangGenerator(generator.Generator):
 
             dtype = decl.dtype.dtype.eval()
 
-            # Vectors are runtime only
-            if dtype == 'vector':
+            # Vectors and strings are runtime only
+            if dtype in ('vector', 'string'):
                 return False
 
             # Including other messages might include optionals/vectors
@@ -168,6 +169,19 @@ class LangGenerator(generator.Generator):
                 ])
             ])
 
+        if dtype == 'string':
+            return gen.Scope([
+                gen.Statement(f'if (packet->bytes_read() + sizeof_uint8() > packet->buffer_size())', ending=''),
+                gen.Block([
+                    gen.Statement('return false')
+                ]),
+                gen.Statement(f'if (packet->bytes_read() + sizeof_uint8() + packet->peek<uint8_t>() > packet->buffer_size())', ending=''),
+                gen.Block([
+                    gen.Statement('return false')
+                ]),
+                gen.Statement(f'{variable} = packet->read<{TYPE_CONVERSION[dtype]}>()')
+            ])
+
         return gen.Scope([
             gen.Statement(f'if (packet->bytes_read() + sizeof_{dtype}() > packet->buffer_size())', ending=''),
             gen.Block([
@@ -202,6 +216,8 @@ class LangGenerator(generator.Generator):
             
         elif self.is_message(dtype):
             return gen.Statement(f'size += packet_size({variable})')
+        elif dtype == 'string':
+            return gen.Statement(f'size += sizeof_uint8() + {variable}.length()')
         else:
             return gen.Statement(f'size += sizeof_{dtype}()')
 

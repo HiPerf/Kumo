@@ -1,0 +1,12 @@
+message login_data 
+{
+    string username;
+    uint64 password0;
+    uint64 password1;
+    uint64 password2;
+    uint64 password3;
+}
+
+
+reliable c2s login(login_data) if status == ingame_status::handshake_done;
+reliable s2c login_response(status);
