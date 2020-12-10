@@ -225,7 +225,7 @@ class Generator(object):
             self.recv_list.append(program_name)
 
         # Message size calculation
-        self._generate_message_size(message)
+        self.generate_message_size(message)
 
         # Done
         self.generated_programs.append(program_name)

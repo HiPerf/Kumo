@@ -1,8 +1,7 @@
-# The struct has_id is automatically declared
-#message has_id
-#{
-#	int64 id;
-#}
+message has_id
+{
+	int64 id;
+}
 
 message spawn_data : has_id
 {
@@ -25,4 +24,4 @@ message complex
 
 reliable s2c do_sth(complex);
 reliable s2c spawn(spawn_data);
-ordered c2s move(movement) if status == IngameStatus::InWorld; # All if have by default 'else handler'
+ordered c2s move(movement) if status == ingame_status::in_world; # All if have by default 'else handler'

@@ -1,0 +1,8 @@
+message client_handshake 
+{
+    uint32 version;
+}
+
+reliable c2s handshake(client_handshake) if status == ingame_status::new_connection;
+reliable s2c handshake_response(status);
+
