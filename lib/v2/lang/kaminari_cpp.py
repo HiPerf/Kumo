@@ -672,6 +672,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#pragma once', ending=''),
                 gen.Statement(f'#include <optional>', ending=''),
                 gen.Statement(f'#include <vector>', ending=''),
+                gen.Statement(f'#include <string>', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending='')
             ]))
 
