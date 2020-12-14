@@ -193,6 +193,18 @@ class Generator(object):
         self.message_size[message_name] = method
         return method
 
+    def generate_dependable_messages(self, message, packer_or_unpacker):
+        for field in self.message_fields_including_base(message):
+            message_name = field.dtype.dtype.eval() 
+            if message_name == 'vector':
+                message_name = field.dtype.spec.eval()
+            
+            if self.is_message(message_name):
+                dependent_message = self.messages[message_name]
+                self.generate_structure(dependent_message)
+                packer_or_unpacker(dependent_message)
+                self.generate_message_size(dependent_message)
+
     def generate_program(self, program):
         program_name = program.name.eval()
 
@@ -215,6 +227,8 @@ class Generator(object):
             self._generate_program_send(program)
             self.send_list.append(program_name)
 
+            self.generate_dependable_messages(message, self.generate_message_packer)
+
         if direction == Direction.BOTH or \
             (direction == Direction.C2S and self.role == Role.SERVER) or \
             (direction == Direction.S2C and self.role == Role.CLIENT):
@@ -223,6 +237,8 @@ class Generator(object):
             self.generate_message_unpacker(message)
             self._generate_program_recv(program)
             self.recv_list.append(program_name)
+
+            self.generate_dependable_messages(message, self.generate_message_unpacker)
 
         # Message size calculation
         self.generate_message_size(message)
