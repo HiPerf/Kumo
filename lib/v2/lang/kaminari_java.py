@@ -184,7 +184,7 @@ class LangGenerator(generator.Generator):
                         gen.Block([
                             gen.Statement(f'{get_value}.add(data)')
                         ]),
-                        gen.Statement(f'else'),
+                        gen.Statement(f'else', ending=''),
                         gen.Block([
                             gen.Statement('return false')
                         ])
