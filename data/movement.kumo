@@ -1,6 +1,6 @@
 message has_id
 {
-	int64 id;
+	uint64 id;
 }
 
 message spawn_data : has_id

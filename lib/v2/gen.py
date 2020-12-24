@@ -108,7 +108,7 @@ class Variable(object):
         return indent(self.decl(level, eval_fn=eval_fn), level)
 
 class Method(Block):
-    def __init__(self, dtype, name, parameters = None, decl_modifiers = None, visibility=Visibility.PRIVATE, template=None, interface=False, hide_visibility=False):
+    def __init__(self, dtype, name, parameters = None, decl_modifiers = None, visibility=Visibility.PRIVATE, template=None, interface=False, hide_visibility=False, postfix=''):
         super().__init__()
 
         self.dtype = dtype
@@ -119,6 +119,7 @@ class Method(Block):
         self.template = template
         self.interface = interface
         self.hide_visibility = hide_visibility
+        self.postfix = postfix
 
     @check_eval_fn
     def decl(self, level, modifiers=[], eval_fn=None):
@@ -142,7 +143,7 @@ class Method(Block):
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
         parameters = ', '.join(x.both(0, eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
-        postfix = postfix if not self.interface else ';'
+        postfix = self.postfix + (postfix if not self.interface else ';')
         fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters}){postfix}\n', level)
         if self.interface:
             return fnc
