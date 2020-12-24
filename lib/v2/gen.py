@@ -4,9 +4,9 @@ from enum import Enum
 INDENT_SPACES = 4
 
 class Visibility(Enum):
-    PUBLIC = 'public'
-    PROTECTED = 'protected'
-    PRIVATE = 'private'
+    PUBLIC =        'public'
+    PROTECTED =     'protected'
+    PRIVATE =       'private'
 
 
 def indent(x, level):
@@ -108,16 +108,17 @@ class Variable(object):
         return indent(self.decl(level, eval_fn=eval_fn), level)
 
 class Method(Block):
-    def __init__(self, dtype, name, parameters = [], decl_modifiers = [], visibility=Visibility.PRIVATE, template=None, interface=False):
+    def __init__(self, dtype, name, parameters = None, decl_modifiers = None, visibility=Visibility.PRIVATE, template=None, interface=False, hide_visibility=False):
         super().__init__()
 
         self.dtype = dtype
         self.name = name
-        self.parameters = parameters
-        self.decl_modifiers = decl_modifiers
+        self.parameters = parameters or []
+        self.decl_modifiers = decl_modifiers or []
         self.visibility = visibility
         self.template = template
         self.interface = interface
+        self.hide_visibility = hide_visibility
 
     @check_eval_fn
     def decl(self, level, modifiers=[], eval_fn=None):
@@ -148,7 +149,7 @@ class Method(Block):
         return fnc + super().both(level, eval_fn=eval_fn)
 
 class Constructor(Method):
-    def __init__(self, dtype, name, parameters = [], decl_modifiers = [], visibility=Visibility.PRIVATE, template=None):
+    def __init__(self, dtype, name, parameters = None, decl_modifiers = None, visibility=Visibility.PRIVATE, template=None):
         super().__init__(dtype, name, parameters, decl_modifiers, visibility, template)
         self.initializers = []
 
@@ -169,14 +170,14 @@ class Constructor(Method):
         return super().both(level, name_ns, initializers)
 
 class Attribute(object):
-    def __init__(self, dtype, name, default=None, decl_modifiers=[], visibility=Visibility.PRIVATE):
+    def __init__(self, dtype, name, default=None, decl_modifiers=None, visibility=Visibility.PRIVATE):
         super().__init__()
 
         self.dtype = dtype
         self.name = name
         self.default = default
         self.visibility = visibility
-        self.decl_modifiers = decl_modifiers
+        self.decl_modifiers = decl_modifiers or []
 
     @check_eval_fn
     def decl(self, level, modifiers=[], eval_fn=None):
@@ -196,10 +197,10 @@ class Attribute(object):
         return self.decl(level, modifiers=modifiers, eval_fn=eval_fn)
 
 class Class(object):
-    def __init__(self, name, decl_modifiers=[], decl_name_base='', template=(None, None), cpp_style=False, csharp_style=False, keyword='class'):
+    def __init__(self, name, decl_modifiers=None, decl_name_base='', template=(None, None), cpp_style=False, csharp_style=False, keyword='class'):
         self.keyword = keyword
         self.name = name
-        self.decl_modifiers = decl_modifiers
+        self.decl_modifiers = decl_modifiers or []
         self.decl_name_base = decl_name_base
         self.cpp_style = cpp_style
         self.csharp_style = csharp_style
@@ -220,7 +221,7 @@ class Class(object):
 
     def _decl_methods(self, visibility, level, eval_fn=None):
         modifiers = [] if not self.csharp_style else [visibility.value]
-        methods = (x.decl(level, modifiers, eval_fn=eval_fn) for x in self.methods if x.visibility == visibility)
+        methods = (x.decl(level, modifiers if not x.hide_visibility else [], eval_fn=eval_fn) for x in self.methods if x.visibility == visibility)
         methods = ''.join(methods)
 
         if self.cpp_style and methods:
@@ -250,7 +251,7 @@ class Class(object):
 
     def _both_methods(self, visibility, level, eval_fn=None):
         modifiers = [] if not self.csharp_style else [visibility.value]
-        methods = (x.both(level, modifiers, eval_fn=eval_fn) for x in self.methods if x.visibility == visibility)
+        methods = (x.both(level, modifiers if not x.hide_visibility else [], eval_fn=eval_fn) for x in self.methods if x.visibility == visibility)
         methods = ''.join(methods)
 
         if self.cpp_style and methods:

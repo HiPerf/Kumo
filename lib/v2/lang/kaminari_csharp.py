@@ -610,13 +610,12 @@ class LangGenerator(generator.Generator):
 
     def _generate_internals(self):
         # Marshal size method
-        method = gen.Method('<T> int', f'size', [
-            gen.Variable('Class<T>', 'cls')
-        ], visibility=gen.Visibility.PUBLIC)
+        method = gen.Method('int', f'size<T>', [], visibility=gen.Visibility.PUBLIC)
         self.marshal_cls.methods.append(method)
 
+        # TODO(gpascualg): Use one method per type
         for message_name, message in self.trivial_messages.items():
-            method.append(gen.Statement(f'if (cls == {to_camel_case(message_name)}.class)', ending=''))
+            method.append(gen.Statement(f'if (typeof(T) == typeof({to_camel_case(message_name)}))', ending=''))
             method.append(gen.Block([
                 gen.Statement('int size = 0'),
                 *[
@@ -629,17 +628,17 @@ class LangGenerator(generator.Generator):
         # Trivial types size
         for dtype in semantic.TRIVIAL_TYPES:
             ctype = TYPE_CONVERSION[dtype]
-            method.append(gen.Statement(f'if (cls == {ctype}.class)', ending=''))
+            method.append(gen.Statement(f'if (typeof(T) == typeof({ctype}))', ending=''))
             method.append(gen.Block([
-                gen.Statement('return Byte.BYTES') if dtype == 'bool' else gen.Statement(f'return {ctype.capitalize()}.BYTES')
+                gen.Statement(f'return sizeof({ctype})')
             ]))
 
         method.append(gen.Statement('return 0'))
 
         # General packet handler
-        method = gen.Method('<T extends IBaseClient> bool', 'handlePacket', [
+        method = gen.Method('bool', 'handlePacket', [
             gen.Variable('PacketReader', 'packet'),
-            gen.Variable('T', 'client')
+            gen.Variable('IClient', 'client')
         ], visibility=gen.Visibility.PUBLIC)
 
         method.append(gen.Statement('switch (packet.getOpcode())', ending=''))
@@ -647,7 +646,7 @@ class LangGenerator(generator.Generator):
             gen.Scope([
                 gen.Statement(f'case Opcodes.opcode{to_camel_case(program)}:', ending=''),
                 gen.Scope([
-                    gen.Statement(f'return handle{to_camel_case(program)}(this, packet, (IClient)client)') 
+                    gen.Statement(f'return handle{to_camel_case(program)}(this, packet, client)') 
                 ], indent=True)
             ]) for program in self.handler_programs
         ] + [gen.Scope([
@@ -671,29 +670,28 @@ class LangGenerator(generator.Generator):
                     gen.Variable('ulong', 'timestamp')
                 ],
                 visibility=gen.Visibility.PUBLIC,
-                interface=True
+                interface=True,
+                hide_visibility=True
             ))
 
         # Opcodes enum
-        opcodes = gen.Class('Opcodes', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
+        opcodes = gen.Block([])
         for program in self.programs.values():
             program_name = program.name.eval()
             name = f'opcode{to_camel_case(program_name)}'
 
-            opcodes.attributes.append(
-                gen.Attribute(
-                    'short', 
-                    f'{name: <24}', 
-                    f'0x{self.opcodes[program_name]}',
-                    ['static', 'final'],
-                    visibility=gen.Visibility.PUBLIC,
-                )
+            opcodes.append(
+                gen.Statement(f'{name: <24} = 0x{self.opcodes[program_name]},', ending='')
             )
             
-        self.opcodes_file.add(opcodes)
+        
+        self.opcodes_file.add(gen.Scope([
+            gen.Statement('public enum opcode', ending=''),
+            opcodes
+        ]))
 
         # Protocol queues
-        queues = gen.Class('ProtocolQueues implements IProtocolQueues', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
+        queues = gen.Class('ProtocolQueues : IProtocolQueues', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.queues_file.add(queues)
         
         constructor = gen.Method('', 'ProtocolQueues', [
@@ -707,16 +705,16 @@ class LangGenerator(generator.Generator):
         ]))
         queues.methods.append(reset)
 
-        ack = gen.Method('void', 'ack', [gen.Variable('Short', 'blockId')], visibility=gen.Visibility.PUBLIC)
+        ack = gen.Method('void', 'ack', [gen.Variable('ushort', 'blockId')], visibility=gen.Visibility.PUBLIC)
         ack.append(gen.Scope([
             gen.Statement(f'{to_camel_case(queue, False)}.ack(blockId)') for queue in self.queues.keys()
         ]))
         queues.methods.append(ack)
 
         process = gen.Method('void', 'process', [
-            gen.Variable('Short', 'blockId'),
-            gen.Variable('Ref<Short>', 'remaining'),
-            gen.Variable('TreeMap<Integer, ArrayList<Packet>>', 'byBlock')
+            gen.Variable('ushort', 'blockId'),
+            gen.Variable('ref ushort', 'remaining'),
+            gen.Variable('SortedDictionary<uint, List<Packet>>', 'byBlock')
         ], visibility=gen.Visibility.PUBLIC)
         process.append(gen.Scope([
             gen.Statement(f'{to_camel_case(queue, False)}.process(Marshal.instance, blockId, remaining, byBlock)') for queue in self.queues.keys()
@@ -761,7 +759,7 @@ class LangGenerator(generator.Generator):
             # General send with data
             if self.can_queue_have_callback(queue):
                 send = gen.Method('void', f'send{to_camel_case(queue_name)}', [
-                    gen.Variable('Short', 'opcode'),
+                    gen.Variable('ushort', 'opcode'),
                     gen.Variable(f'IData', 'data'),
                     gen.Variable('IAckCallback', 'callback')
                 ], visibility=gen.Visibility.PUBLIC)
@@ -769,7 +767,7 @@ class LangGenerator(generator.Generator):
                 queues.methods.append(send)
             
             send = gen.Method('void', f'send{to_camel_case(queue_name)}', [
-                gen.Variable('Short', 'opcode'),
+                gen.Variable('ushort', 'opcode'),
                 gen.Variable(f'IData', 'data')
             ], visibility=gen.Visibility.PUBLIC)
             send.append(gen.Statement(f'{to_camel_case(queue_name, False)}.add(Marshal.instance, opcode, data, new NoCallback())'))
@@ -803,17 +801,7 @@ class LangGenerator(generator.Generator):
             fp.write(self.client_file.source())
 
         with open(f'{path}/Marshal.cs', 'w') as fp:
-            fp.write(self.marshal_file.source([
-                *[
-                    gen.Statement(f'import {package}.structs.{name}') for name in self.all_structs.keys()
-                ],
-                gen.Statement(f'import {package}.IClient'),
-                gen.Statement(f'import {kaminari}.Packet'),
-                gen.Statement(f'import {kaminari}.PacketReader'),
-                gen.Statement(f'import {kaminari}.IMarshal'),
-                gen.Statement(f'import {kaminari}.IBaseClient'),
-                gen.Statement(f'import {kaminari}.IHandlePacket')
-            ]))
+            fp.write(self.marshal_file.source())
 
         with open(f'{path}/Rpc.cs', 'w') as fp:
             fp.write(self.rpc_file.source([
@@ -845,9 +833,7 @@ class LangGenerator(generator.Generator):
                 ]))
 
         with open(f'{path}/Opcodes.cs', 'w') as fp:
-            fp.write(self.opcodes_file.source([
-                gen.Statement(f'package {package}')
-            ]))
+            fp.write(self.opcodes_file.source())
 
         with open(f'{path}/ProtocolQueues.cs', 'w') as fp:
             fp.write(self.queues_file.source([
