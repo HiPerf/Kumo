@@ -420,6 +420,18 @@ class LangGenerator(generator.Generator):
                     method.append(gen.Block([
                         gen.Statement('return false')
                     ]))
+
+                    dtype = decl.dtype.dtype.eval()
+                    if dtype == 'vector':
+                        inner = decl.dtype.spec.eval()                        
+                        if not self.is_message(inner):
+                            inner = TYPE_CONVERSION[inner]
+
+                        dtype = f'{TYPE_CONVERSION["vector"]}<{inner}>'
+                    elif not self.is_message(dtype):
+                        dtype = TYPE_CONVERSION[dtype]
+                    
+                    method.append(gen.Statement(f'this.{name} = new Optional<{dtype}>()'))
                     
                     method.append(gen.Statement(f'if (packet.getData().readByte() == 1)', ending=''))
                     method.append(gen.Block([
@@ -742,7 +754,7 @@ class LangGenerator(generator.Generator):
                 data_dtype = to_camel_case(args[1].eval())
 
                 queue_packer_template = f'{queue_packer}<{global_dtype}, {data_dtype}>, {data_dtype}'
-                queue_packer_args = f'{global_dtype}.class, Opcodes.opcode{to_camel_case(progam_name)}'
+                queue_packer_args = f'{global_dtype}.class, Opcodes.opcode{to_camel_case(program_name)}'
 
             if queue.base.argument is not None:
                 queue_packer_args = queue.base.argument.eval()

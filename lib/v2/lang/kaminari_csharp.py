@@ -34,15 +34,21 @@ def to_camel_case(snake_str, capitalize=True):
     return leading + ''.join(x.capitalize() for x in components[1:])
 
 class File(object):
-    def __init__(self):
+    def __init__(self, namespace=None):
         self.sources = []
+        self.namespace = namespace
 
     def add(self, code):
         self.sources.append(code)
 
     def source(self, prepend=[]):
-        source = gen.Scope(prepend + self.sources).both(0)
-        return source
+        if self.namespace is not None:
+            return gen.Scope(prepend + [
+                gen.Statement(f'namespace {self.namespace}', ending=''),
+                gen.Block(self.sources)
+            ]).both(0)
+        else:
+            return gen.Scope(prepend + self.sources).both(0)
     
     def __str__(self):
         return self.source()
@@ -56,26 +62,26 @@ class LangGenerator(generator.Generator):
         self.handler_programs = set()
 
         # Output code
-        self.marshal_file = File()
-        self.client_file = File()
-        self.opcodes_file = File()
-        self.rpc_file = File()
-        self.queues_file = File()
-        self.config_file = File()
+        self.marshal_file = File(namespace='Kumo')
+        self.client_file = File(namespace='Kumo')
+        self.opcodes_file = File(namespace='Kumo')
+        self.rpc_file = File(namespace='Kumo')
+        self.queues_file = File(namespace='Kumo')
+        self.config_file = File(namespace='Kumo')
 
         # Needs processing at the end
         self.trivial_messages = {}
         self.all_structs = {}
 
         # Flush marshal class already
-        self.marshal_cls = gen.Class('Marshal : IMarshal, IHandlePacket', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
+        self.marshal_cls = gen.Class('Marshal : Kaminari.IMarshal, Kaminari.IHandlePacket', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.marshal_cls.attributes.append(
             gen.Attribute('Marshal', 'instance', decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
         )
         self.marshal_file.add(self.marshal_cls)
 
         # Flush IClient 
-        self.client_itf = gen.Class('IClient : IBaseClient', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], keyword='interface')
+        self.client_itf = gen.Class('IClient : Kaminari.IBaseClient', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], keyword='interface')
         self.client_file.add(self.client_itf)
 
         # RPC class
@@ -313,22 +319,22 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         base_name = None
-        base = ' : IData'
+        base = ' : Kaminari.IData'
         if message.base.name is not None:
             base_name = message.base.name.eval()
 
             # TODO(gpascualg): This is not really elegant
             if base_name == 'has_id':
-                base = f' : IHasId'
+                base = f' : Kaminari.IHasId'
             else:
-                base = f' extends {to_camel_case(base_name)}'
+                base = f' : {to_camel_case(base_name)}'
 
         struct = gen.Class(to_camel_case(message_name), decl_name_base=base, csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         for decl in it.chain(self._base_message_fields(base_name), message.fields.eval()) :
             dtype = decl.dtype.dtype.eval()
             ctype = '{}'
             if decl.optional:
-                ctype = 'Optional<{}>'
+                ctype = 'Kaminari.Optional<{}>'
 
             temp = dtype
             if dtype == 'vector':
@@ -376,8 +382,8 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         method = gen.Method('void', f'pack', [
-            gen.Variable('IMarshal', 'marshal'),
-            gen.Variable('Packet', 'packet')
+            gen.Variable('Kaminari.IMarshal', 'marshal'),
+            gen.Variable('Kaminari.Packet', 'packet')
         ], visibility=gen.Visibility.PUBLIC)
 
         for decl in self.message_fields_including_base(message):
@@ -398,8 +404,8 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         method = gen.Method('bool', f'unpack', [
-            gen.Variable(f'IMarshal', 'marshal'),
-            gen.Variable('PacketReader', 'packet')
+            gen.Variable(f'Kaminari.IMarshal', 'marshal'),
+            gen.Variable('Kaminari.PacketReader', 'packet')
         ], visibility=gen.Visibility.PUBLIC)
 
         if self.__is_trivial(message):
@@ -420,7 +426,18 @@ class LangGenerator(generator.Generator):
                     method.append(gen.Block([
                         gen.Statement('return false')
                     ]))
+
+                    dtype = decl.dtype.dtype.eval()
+                    if dtype == 'vector':
+                        inner = decl.dtype.spec.eval()                        
+                        if not self.is_message(inner):
+                            inner = TYPE_CONVERSION[inner]
+
+                        dtype = f'{TYPE_CONVERSION["vector"]}<{inner}>'
+                    elif not self.is_message(dtype):
+                        dtype = TYPE_CONVERSION[dtype]
                     
+                    method.append(gen.Statement(f'this.{name} = new Kaminari.Optional<{dtype}>()'))
                     method.append(gen.Statement(f'if (packet.getData().readByte() == 1)', ending=''))
                     method.append(gen.Block([
                         self.__read_type(decl, f'this.{name}', True)
@@ -441,7 +458,7 @@ class LangGenerator(generator.Generator):
 
         # This one is in the struct itself
         method = gen.Method('int', f'size', [
-            gen.Variable(f'IMarshal', 'marshal')
+            gen.Variable(f'Kaminari.IMarshal', 'marshal')
         ], visibility=gen.Visibility.PUBLIC)
         struct.methods.append(method)
 
@@ -507,24 +524,24 @@ class LangGenerator(generator.Generator):
                 
                 if self.can_queue_have_callback(self.queues[queue]):
                     method = gen.Method('void', f'broadcast{to_camel_case(program_name)}{suffix}', [
-                        gen.Variable('IBroadcaster<ProtocolQueues>', 'broadcaster'),
+                        gen.Variable('Kaminari.IBroadcaster<ProtocolQueues>', 'broadcaster'),
                         gen.Variable(f'{message_name}', 'data'),
                         gen.Variable('Action', 'callback')
                     ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
                     methods.append(method)
 
-                    method.append(gen.Statement(f'Packet packet = Packet.make((ushort)Opcodes.opcode{to_camel_case(program_name)}, callback)'))
+                    method.append(gen.Statement(f'Kaminari.Packet packet = Kaminari.Packet.make((ushort)Opcodes.opcode{to_camel_case(program_name)}, callback)'))
                     method.append(gen.Statement(f'data.pack(Marshal.instance, packet)'))
                     method.append(gen.Statement(f'broadcaster.broadcast((ProtocolQueues pq) => pq.send{to_camel_case(queue)}(packet))'))
                 
                 # No callback
                 method = gen.Method('void', f'broadcast{to_camel_case(program_name)}{suffix}', [
-                    gen.Variable('IBroadcaster<ProtocolQueues>', 'broadcaster'),
+                    gen.Variable('Kaminari.IBroadcaster<ProtocolQueues>', 'broadcaster'),
                     gen.Variable(f'{message_name}', 'data')
                 ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
                 methods.append(method)
 
-                method.append(gen.Statement(f'Packet packet = Packet.make((ushort)Opcodes.opcode{to_camel_case(program_name)})'))
+                method.append(gen.Statement(f'Kaminari.Packet packet = Kaminari.Packet.make((ushort)Opcodes.opcode{to_camel_case(program_name)})'))
                 method.append(gen.Statement(f'data.pack(Marshal.instance, packet)'))
                 method.append(gen.Statement(f'broadcaster.broadcast((ProtocolQueues pq) => pq.send{to_camel_case(queue)}(packet))'))
 
@@ -532,7 +549,7 @@ class LangGenerator(generator.Generator):
                 # Adding by bare data is always available
                 # But we can not have callbacks YET
                 method = gen.Method('void', f'broadcast{to_camel_case(program_name)}{suffix}', [
-                    gen.Variable('IBroadcaster<ProtocolQueues>', 'broadcaster'),
+                    gen.Variable('Kaminari.IBroadcaster<ProtocolQueues>', 'broadcaster'),
                     gen.Variable(f'{message_name}', 'data')
                 ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
                 methods.append(method)
@@ -552,8 +569,8 @@ class LangGenerator(generator.Generator):
         message_name = args[0]
 
         method = gen.Method('bool', f'handle{to_camel_case(program_name)}', [
-            gen.Variable('IMarshal', 'marshal'),
-            gen.Variable('PacketReader', 'packet'),
+            gen.Variable('Kaminari.IMarshal', 'marshal'),
+            gen.Variable('Kaminari.PacketReader', 'packet'),
             gen.Variable('IClient', 'client')
         ], visibility=gen.Visibility.PRIVATE)
 
@@ -614,9 +631,9 @@ class LangGenerator(generator.Generator):
 
         # General packet handler
         method = gen.Method('bool', 'handlePacket<T>', [
-            gen.Variable('PacketReader', 'packet'),
+            gen.Variable('Kaminari.PacketReader', 'packet'),
             gen.Variable('T', 'client')
-        ], visibility=gen.Visibility.PUBLIC, postfix=' where T : IBaseClient')
+        ], visibility=gen.Visibility.PUBLIC, postfix=' where T : Kaminari.IBaseClient')
 
         method.append(gen.Statement('switch (packet.getOpcode())', ending=''))
         method.append(gen.Block([
@@ -668,7 +685,7 @@ class LangGenerator(generator.Generator):
         ]))
 
         # Protocol queues
-        queues = gen.Class('ProtocolQueues : IProtocolQueues', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
+        queues = gen.Class('ProtocolQueues : Kaminari.IProtocolQueues', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.queues_file.add(queues)
         
         constructor = gen.Method('', 'ProtocolQueues', [
@@ -691,7 +708,7 @@ class LangGenerator(generator.Generator):
         process = gen.Method('void', 'process', [
             gen.Variable('ushort', 'blockId'),
             gen.Variable('ref ushort', 'remaining'),
-            gen.Variable('SortedDictionary<uint, List<Packet>>', 'byBlock')
+            gen.Variable('SortedDictionary<uint, List<Kaminari.Packet>>', 'byBlock')
         ], visibility=gen.Visibility.PUBLIC)
         process.append(gen.Scope([
             gen.Statement(f'{to_camel_case(queue, False)}.process(Marshal.instance, blockId, ref remaining, byBlock)') for queue in self.queues.keys()
@@ -701,28 +718,28 @@ class LangGenerator(generator.Generator):
         for queue_name, queue in self.queues.items():
             # Attribute
             queue_base = queue.base.subtype.eval()
-            queue_packer = 'ImmediatePacker'
-            queue_packer_template = 'ImmediatePacker, Packet'
+            queue_packer = 'Kaminari.ImmediatePacker'
+            queue_packer_template = 'Kaminari.ImmediatePacker, Kaminari.Packet'
             queue_packer_args = ''
 
             if queue.specifier.queue_type == boxes.QueueSpecifierType.SPECIALIZED:
-                queue_packer = to_camel_case(queue.specifier.args.eval())
-                queue_packer_template = f'{queue_packer}, Packet'
+                queue_packer = f'Kaminari.{to_camel_case(queue.specifier.args.eval())}'
+                queue_packer_template = f'{queue_packer}, Kaminari.Packet'
 
             elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
-                queue_packer = 'UniqueMergePacker'
+                queue_packer = 'Kaminari.UniqueMergePacker'
                 args = queue.specifier.args
                 global_dtype = to_camel_case(args[0].eval())
                 program_name = args[2].eval()
                 data_dtype = to_camel_case(args[1].eval())
 
-                queue_packer_template = f'{queue_packer}<{global_dtype}, {data_dtype}>, {data_dtype}'
-                queue_packer_args = f'{global_dtype}.class, Opcodes.opcode{to_camel_case(progam_name)}'
+                queue_packer_template = f'Kaminari.{queue_packer}<{global_dtype}, {data_dtype}>, {data_dtype}'
+                queue_packer_args = f'{global_dtype}.class, Opcodes.opcode{to_camel_case(program_name)}'
 
             if queue.base.argument is not None:
                 queue_packer_args = queue.base.argument.eval()
 
-            queue_qualified_name = f'{to_camel_case(queue_base)}<{queue_packer_template}>'
+            queue_qualified_name = f'Kaminari.{to_camel_case(queue_base)}<{queue_packer_template}>'
 
             constructor.append(
                 gen.Statement(f'{to_camel_case(queue_name, False)} = new {queue_qualified_name}(new {queue_packer}({queue_packer_args}))')
@@ -737,7 +754,7 @@ class LangGenerator(generator.Generator):
             if self.can_queue_have_callback(queue):
                 send = gen.Method('void', f'send{to_camel_case(queue_name)}', [
                     gen.Variable('ushort', 'opcode'),
-                    gen.Variable(f'IData', 'data'),
+                    gen.Variable(f'Kaminari.IData', 'data'),
                     gen.Variable('Action', 'callback')
                 ], visibility=gen.Visibility.PUBLIC)
                 send.append(gen.Statement(f'{to_camel_case(queue_name, False)}.add(Marshal.instance, opcode, data, callback)'))
@@ -745,14 +762,14 @@ class LangGenerator(generator.Generator):
             
             send = gen.Method('void', f'send{to_camel_case(queue_name)}', [
                 gen.Variable('ushort', 'opcode'),
-                gen.Variable(f'IData', 'data')
+                gen.Variable(f'Kaminari.IData', 'data')
             ], visibility=gen.Visibility.PUBLIC)
             send.append(gen.Statement(f'{to_camel_case(queue_name, False)}.add(Marshal.instance, opcode, data, null)'))
             queues.methods.append(send)
 
             if self.has_queue_packed_add(queue):
                 send = gen.Method('void', f'send{to_camel_case(queue_name)}', [
-                    gen.Variable('Packet', 'packet')
+                    gen.Variable('Kaminari.Packet', 'packet')
                 ], visibility=gen.Visibility.PUBLIC)
                 send.append(gen.Statement(f'{to_camel_case(queue_name, False)}.add(packet)'))
                 queues.methods.append(send)
@@ -787,7 +804,7 @@ class LangGenerator(generator.Generator):
 
         for struct_name, struct in self.all_structs.items():
             with open(f'{path}/structs/{struct_name}.cs', 'w') as fp:
-                structs_file = File()
+                structs_file = File(namespace='Kumo')
                 structs_file.add(struct)
 
                 fp.write(structs_file.source([
