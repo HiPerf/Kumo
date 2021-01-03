@@ -154,7 +154,7 @@ class Generator(object):
                 self.generate_structure(self.messages[base])
             else:
                 self.generate_base_structure(base)
-                assert base == 'has_id', 'Invalid base class'
+                assert base in ('has_id', 'has_data_vector'), 'Invalid base class'
         
         struct = self._generate_structure(message)
         self.structures[message_name] = struct
@@ -249,6 +249,17 @@ class Generator(object):
     def generate(self, version):
         for program in self.programs.values():
             self.generate_program(program)
+
+        # Some queues require extra types
+        for queue in self.queues.values():
+            print( queue.specifier.queue_type )
+            if queue.specifier.queue_type == QueueSpecifierType.TEMPLATED:
+                global_data_name = queue.specifier.args[0].eval()
+                message = self.messages[global_data_name]
+                
+                self.generate_structure(message)
+                self.generate_message_packer(message)
+                self.generate_message_size(message)
 
         self._generate_internals()
         self._generate_version(version)

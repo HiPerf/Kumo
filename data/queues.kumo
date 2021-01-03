@@ -1,8 +1,16 @@
 
+queue unreliable : unreliable_queue {
+	<> # Default packer, equivalent to <immediate_packer>
+}
+
 queue reliable : reliable_queue {
 	<> # Default packer, equivalent to <immediate_packer>
 }
 
 queue ordered : reliable_queue {
 	<ordered_packer>
+}
+
+queue eventually_synced : eventually_synced_queue {
+	<world_update_data, entity_update, world_update>
 }

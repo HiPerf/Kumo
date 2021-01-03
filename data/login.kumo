@@ -7,6 +7,24 @@ message login_data
     uint64 password3;
 }
 
+message character
+{
+    string name;
+    uint16 level;
+}
+
+message characters
+{
+    vector<character> list;
+}
+
+message character_selection
+{
+    uint8 index;
+}
 
 reliable c2s login(login_data) if status == ingame_status::handshake_done;
-reliable s2c login_response(status);
+reliable s2c login_response(status_ex);
+reliable s2c characters_list(characters);
+reliable c2s character_selected(character_selection) if status == ingame_status::login_done;
+reliable s2c enter_world(success);

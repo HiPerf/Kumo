@@ -1,0 +1,11 @@
+message entity_update : has_id {    
+    float x;
+    float z;
+    float angle;
+}
+
+message world_update_data : has_data_vector<entity_update> {
+    vector<entity_update> data;
+}
+
+eventually_synced s2c world_update(entity_update);

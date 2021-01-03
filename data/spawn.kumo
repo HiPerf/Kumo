@@ -1,0 +1,21 @@
+message player_data
+{
+    uint64 id;
+    string name;
+}
+
+message spawn
+{
+    uint64 id;
+    float x;
+    float z;
+}
+
+message despawn
+{
+    uint64 id;
+}
+
+reliable s2c player_information(player_data);
+ordered s2c spawned_entity(spawn);
+ordered s2c despawned_entity(despawn);
