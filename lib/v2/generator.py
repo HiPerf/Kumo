@@ -14,6 +14,7 @@ class Generator(object):
         self.config = config
         self.role = role
         self.queues = queues
+        self.queue_usage = {queue: 0 for queue in queues}
         self.messages = messages
         self.programs = programs
 
@@ -88,6 +89,10 @@ class Generator(object):
 
     def is_message(self, dtype):
         return dtype in self.messages
+    
+    def is_program_sender(self, direction):
+        return (self.role == Role.CLIENT and direction == Direction.C2S) or \
+            (self.role == Role.SERVER and direction == Direction.S2C)
 
     def message_fields_including_base(self, message):
         fields = message.fields.eval()
@@ -214,6 +219,9 @@ class Generator(object):
         # Message packer/unpacker according to direction
         direction = program.direction.eval()
         args = program.args.eval()
+
+        # Update queue_usage
+        self.queue_usage[program.queue.eval()] += int(self.is_program_sender(direction))
 
         assert len(args) == 1, "Multiple arguments have been deprecated"
         message = self.messages[args[0]]

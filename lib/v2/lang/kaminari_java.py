@@ -715,13 +715,13 @@ class LangGenerator(generator.Generator):
 
         reset = gen.Method('void', 'reset', visibility=gen.Visibility.PUBLIC)
         reset.append(gen.Scope([
-            gen.Statement(f'{to_camel_case(queue, False)}.clear()') for queue in self.queues.keys()
+            gen.Statement(f'{to_camel_case(queue, False)}.clear()') for queue in self.queues.keys() if self.queue_usage[queue]
         ]))
         queues.methods.append(reset)
 
         ack = gen.Method('void', 'ack', [gen.Variable('Short', 'blockId')], visibility=gen.Visibility.PUBLIC)
         ack.append(gen.Scope([
-            gen.Statement(f'{to_camel_case(queue, False)}.ack(blockId)') for queue in self.queues.keys()
+            gen.Statement(f'{to_camel_case(queue, False)}.ack(blockId)') for queue in self.queues.keys() if self.queue_usage[queue]
         ]))
         queues.methods.append(ack)
 
@@ -731,11 +731,14 @@ class LangGenerator(generator.Generator):
             gen.Variable('TreeMap<Integer, ArrayList<Packet>>', 'byBlock')
         ], visibility=gen.Visibility.PUBLIC)
         process.append(gen.Scope([
-            gen.Statement(f'{to_camel_case(queue, False)}.process(Marshal.instance, blockId, remaining, byBlock)') for queue in self.queues.keys()
+            gen.Statement(f'{to_camel_case(queue, False)}.process(Marshal.instance, blockId, remaining, byBlock)') for queue in self.queues.keys() if self.queue_usage[queue]
         ]))
         queues.methods.append(process)
 
         for queue_name, queue in self.queues.items():
+            if not self.queue_usage[queue_name]:
+                continue
+
             # Attribute
             queue_base = queue.base.subtype.eval()
             queue_packer = 'ImmediatePacker'
