@@ -320,6 +320,8 @@ class LangGenerator(generator.Generator):
             # TODO(gpascualg): This is not really elegant
             if base_name == 'has_id':
                 base = f' implements IHasId'
+            elif base_name == 'has_data_vector':
+                base = f' implements IHasDataVector<{to_camel_case(message.base.template.eval())}>'
             else:
                 base = f' extends {to_camel_case(base_name)}'
 
@@ -349,7 +351,7 @@ class LangGenerator(generator.Generator):
             ))
 
         self.all_structs[to_camel_case(message_name)] = struct
-        self.__generate_base_methods(struct, base_name)
+        self.__generate_base_methods(struct, base_name, base)
         self.__generate_message_packer(message, struct)
         self.__generate_message_unpacker(message, struct)
         self.__generate_message_size(message, struct)
@@ -358,19 +360,27 @@ class LangGenerator(generator.Generator):
     def _generate_base_structure(self, base):
         pass
 
-    def __generate_base_methods(self, struct: gen.Class, base_name: str):
-        if base_name != 'has_id':
-            return
+    def __generate_base_methods(self, struct: gen.Class, base_name: str, base: boxes.MessageBaseBox):
+        if base_name == 'has_id':
+            method = gen.Method('Long', f'getId', [], visibility=gen.Visibility.PUBLIC)
+            method.append(gen.Statement('return id'))
+            struct.methods.append(method)
 
-        method = gen.Method('Long', f'getId', [], visibility=gen.Visibility.PUBLIC)
-        method.append(gen.Statement('return id'))
-        struct.methods.append(method)
+            method = gen.Method('void', f'setId', [
+                gen.Variable('Long', 'id')
+            ], visibility=gen.Visibility.PUBLIC)
+            method.append(gen.Statement('this.id = id'))
+            struct.methods.append(method)
 
-        method = gen.Method('void', f'setId', [
-            gen.Variable('Long', 'id')
-        ], visibility=gen.Visibility.PUBLIC)
-        method.append(gen.Statement('this.id = id'))
-        struct.methods.append(method)
+        elif base_name == 'has_data_vector':
+            method = gen.Method('void', f'initialize', [], visibility=gen.Visibility.PUBLIC)
+            method.append(gen.Statement(f'data = new ArrayList<Kumo.{to_camel_case(base.template.eval())}>()'))
+            struct.methods.append(method)
+
+            method = gen.Method(f'ArrayList<Kumo.{to_camel_case(base.template.eval())}>', f'getData', [], visibility=gen.Visibility.PUBLIC)
+            method.append(gen.Statement('return data'))
+            struct.methods.append(method)
+
 
     def __generate_message_packer(self, message: boxes.MessageBox, struct: gen.Class):
         message_name = message.name.eval()
@@ -607,6 +617,12 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'return {false_case}(client, packet.getOpcode())')
             ]))
         
+        # Templated queues work by filling vectors
+        queue = self.queues[program.queue.eval()]
+        if queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
+            args = queue.specifier.args
+            message_name = args[0].eval()
+
         method.append(gen.Statement(f'{to_camel_case(message_name)} data = new {to_camel_case(message_name)}()'))
         method.append(gen.Statement(f'if (!data.unpack(marshal, packet))', ending=''))
         method.append(gen.Block([
@@ -675,6 +691,13 @@ class LangGenerator(generator.Generator):
         for program_name in self.handler_programs:
             program = self.programs[program_name]
             message = self.get_program_message(program)
+
+            # Templated queues work by filling vectors
+            queue = self.queues[program.queue.eval()]
+            if queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
+                args = queue.specifier.args
+                message = args[0].eval()
+
             self.client_itf.methods.append(gen.Method(
                 'boolean', 
                 f'on{to_camel_case(program_name)}',

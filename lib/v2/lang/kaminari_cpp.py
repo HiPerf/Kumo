@@ -470,6 +470,12 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()))')
             ]))
         
+        # Templated queues work by filling vectors
+        queue = self.queues[program.queue.eval()]
+        if queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
+            args = queue.specifier.args
+            message_name = args[0].eval()
+
         method.append(gen.Statement(f'::kumo::{message_name} data'))
         method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
         method.append(gen.Block([
