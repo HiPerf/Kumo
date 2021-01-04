@@ -577,7 +577,7 @@ class LangGenerator(generator.Generator):
                 args = queue.specifier.args
                 program_name = args[2].eval()
 
-                queue_packer_template = f'<uint64_t, {args[0].eval()}, {args[1].eval()}, ::kumo::opcode::{program_name}, ::kumo::marshal, {queue_name.capitalize()}Allocator>'
+                queue_packer_template = f'<uint64_t, {args[0].eval()}, {args[1].eval()}, static_cast<uint16_t>(::kumo::opcode::{program_name}), ::kumo::marshal, {queue_name.capitalize()}Allocator>'
 
             queue_packer = queue_packer + queue_packer_template
             if queue.base.argument is not None:
