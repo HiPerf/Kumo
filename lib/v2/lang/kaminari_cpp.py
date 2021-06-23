@@ -272,7 +272,7 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         method = gen.Method('void', f'pack', [
-            gen.Variable('const boost::intrusive_ptr<::kaminari::packet>&', 'packet'),
+            gen.Variable('const boost::intrusive_ptr<::kaminari::buffers::packet>&', 'packet'),
             gen.Variable(f'const {message_name}&', 'data')
         ], decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
 
@@ -296,7 +296,7 @@ class LangGenerator(generator.Generator):
         message_name = message.name.eval()
 
         method = gen.Method('bool', f'unpack', [
-            gen.Variable('::kaminari::packet_reader*', 'packet'),
+            gen.Variable('::kaminari::buffers::packet_reader*', 'packet'),
             gen.Variable(f'{message_name}&', 'data')
         ], decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
 
@@ -404,7 +404,7 @@ class LangGenerator(generator.Generator):
                     ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename T>', ending=''))
                     methods.append(method)
 
-                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make((uint16_t)opcode::{program_name}, std::forward<T>(callback))'))
+                    method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::buffers::packet> packet = ::kaminari::buffers::packet::make((uint16_t)opcode::{program_name}, std::forward<T>(callback))'))
                     method.append(gen.Statement(f'::kumo::marshal::pack(packet, data)'))
                     method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
@@ -416,7 +416,7 @@ class LangGenerator(generator.Generator):
                 ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
                 methods.append(method)
 
-                method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::packet> packet = ::kaminari::packet::make((uint16_t)opcode::{program_name})'))
+                method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::buffers::packet> packet = ::kaminari::buffers::packet::make((uint16_t)opcode::{program_name})'))
                 method.append(gen.Statement(f'::kumo::marshal::pack(packet, data)'))
                 method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
                 method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
@@ -451,7 +451,7 @@ class LangGenerator(generator.Generator):
         message_name = args[0]
 
         method = gen.Method('bool', f'handle_{program_name}', [
-            gen.Variable('::kaminari::packet_reader*', 'packet'),
+            gen.Variable('::kaminari::buffers::packet_reader*', 'packet'),
             gen.Variable('C*', 'client')
         ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PRIVATE, decl_modifiers=['static'])
 
@@ -499,7 +499,7 @@ class LangGenerator(generator.Generator):
 
         # General packet handler
         method = gen.Method('bool', 'handle_packet', [
-            gen.Variable('::kaminari::packet_reader*', 'packet'),
+            gen.Variable('::kaminari::buffers::packet_reader*', 'packet'),
             gen.Variable('C*', 'client')
         ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
 
@@ -619,7 +619,7 @@ class LangGenerator(generator.Generator):
 
             if self.has_queue_packed_add(queue):
                 send = gen.Method('void', f'send_{queue_name}', [
-                    gen.Variable('const boost::intrusive_ptr<::kaminari::packet>&', 'packet')
+                    gen.Variable('const boost::intrusive_ptr<::kaminari::buffers::packet>&', 'packet')
                 ], visibility=gen.Visibility.PUBLIC)
                 send.append(gen.Statement(f'_{queue_name}.add(packet)'))
                 queues.methods.append(send)
