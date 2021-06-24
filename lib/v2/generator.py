@@ -262,7 +262,7 @@ class Generator(object):
         # Some queues require extra types
         for queue in self.queues.values():
             if queue.specifier.queue_type == QueueSpecifierType.TEMPLATED:
-                global_data_name = queue.specifier.args[0].eval()
+                global_data_name = queue.specifier.args[1].eval()
                 message = self.messages[global_data_name]
                 
                 self.generate_structure(message)
