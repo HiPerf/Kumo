@@ -543,9 +543,7 @@ class LangGenerator(generator.Generator):
             gen.Variable('Args&&...', 'allocator_args')
         ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename... Args>', ending=''))
         
-        for i, queue_name in enumerate(self.queues.keys()):
-            if not self.queue_usage[queue_name]:
-                continue
+        for i, queue_name in enumerate(x for x in self.queues.keys() if not self.queue_usage[x]):
             constructor.initializers.append(gen.Statement(f'_{queue_name}(resend_threshold, std::get<{i}>(std::forward_as_tuple(allocator_args...)))', ending=''))
 
         queues.methods.append(constructor)
