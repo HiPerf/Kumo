@@ -588,8 +588,8 @@ class LangGenerator(generator.Generator):
                 if num_programs > 1:
                     raise RuntimeError('Eventually synced queues can be used only in one program')
 
-                queue_packer = args[0].eval()
                 args = queue.specifier.args
+                queue_packer = args[0].eval()
                 program_name = self.queue_usage[queue_name][0]
 
                 queue_packer_template = f'<uint64_t, {args[1].eval()}, {args[2].eval()}, static_cast<uint16_t>(::kumo::opcode::{program_name}), ::kumo::marshal, {queue_name.capitalize()}Allocator>'
