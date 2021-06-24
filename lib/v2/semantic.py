@@ -38,11 +38,11 @@ def check_queue_specifier(name, queue, messages, programs):
         assert ptype in BASE_PACKERS, f'Queue `{name}` specifies incorrect packer `{ptype}`'
 
     elif queue_type == boxes.QueueSpecifierType.TEMPLATED:
-        gtype, dtype, program = (x.eval() for x in queue.specifier.args)
+        packer, gtype, dtype = (x.eval() for x in queue.specifier.args)
 
+        assert packer in BASE_PACKERS, f'Queue `{name}` specifies incorrect packer `{packer}`'
         assert gtype in messages, f'Queue `{name}` specifies incorrect global message `{gtype}`'
         assert dtype in messages, f'Queue `{name}` specifies incorrect detail message `{dtype}`'
-        assert program in programs, f'Queue `{name}` specifies incorrect program `{program}`'
     elif queue_type == boxes.QueueSpecifierType.ARRAY:
         raise NotImplementedError("Array definitions are deprecated")
 
