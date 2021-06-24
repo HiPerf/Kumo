@@ -370,7 +370,7 @@ class LangGenerator(generator.Generator):
         methods = []
 
         # Templated allocators
-        allocators = [f'{queue.capitalize()}Allocator' for queue in self.queues.keys()]
+        allocators = [f'{queue.capitalize()}Allocator' for queue in self.queues.keys() if self.queue_usage[queue]]
         allocators_template = 'class ' + ', class '.join(allocators)
         allocators_names = ', '.join(allocators)
     
