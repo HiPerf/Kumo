@@ -708,7 +708,12 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <kaminari/packers/most_recent_packer_by_opcode.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/packers/ordered_packer.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/packers/unique_merge_packer.hpp>', ending=''),
-                kaminari_fwd(gen.Statement('class packet')),
+                kaminari_fwd([
+                    gen.Statement('namespace buffers', ending=''),
+                    gen.Block([
+                        gen.Statement('class packet')
+                    ])
+                ]),
                 kaminari_fwd([
                     gen.Statement('namespace detail', ending=''),
                     gen.Block([
