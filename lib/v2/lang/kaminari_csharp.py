@@ -602,7 +602,7 @@ class LangGenerator(generator.Generator):
         queue = self.queues[program.queue.eval()]
         if queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
             args = queue.specifier.args
-            message_name = args[0].eval()
+            message_name = args[1].eval()
         
         method.append(gen.Statement(f'{to_camel_case(message_name)} data = new {to_camel_case(message_name)}()'))
         method.append(gen.Statement(f'if (!data.unpack(marshal, packet))', ending=''))
@@ -676,7 +676,7 @@ class LangGenerator(generator.Generator):
             queue = self.queues[program.queue.eval()]
             if queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
                 args = queue.specifier.args
-                message = args[0].eval()
+                message = args[1].eval()
                 
             self.client_itf.methods.append(gen.Method(
                 'bool', 
@@ -752,11 +752,15 @@ class LangGenerator(generator.Generator):
                 queue_packer_template = f'{queue_packer}, Kaminari.Packet'
 
             elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
-                queue_packer = 'Kaminari.UniqueMergePacker'
+                num_programs = len(self.queue_usage[queue_name])
+                if num_programs > 1:
+                    raise RuntimeError('Eventually synced queues can be used only in one program')
+                
                 args = queue.specifier.args
-                global_dtype = to_camel_case(args[0].eval())
-                program_name = args[2].eval()
-                data_dtype = to_camel_case(args[1].eval())
+                queue_packer = to_camel_case(args[0].eval())
+                global_dtype = to_camel_case(args[1].eval())
+                data_dtype = to_camel_case(args[2].eval())
+                program_name = self.queue_usage[queue_name][0]
 
                 queue_packer_template = f'Kaminari.{queue_packer}<{global_dtype}, {data_dtype}>, {data_dtype}'
                 queue_packer_args = f'{global_dtype}.class, Opcodes.opcode{to_camel_case(program_name)}'

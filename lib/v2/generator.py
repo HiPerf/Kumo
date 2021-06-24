@@ -14,7 +14,7 @@ class Generator(object):
         self.config = config
         self.role = role
         self.queues = queues
-        self.queue_usage = {queue: 0 for queue in queues}
+        self.queue_usage = {queue: [] for queue in queues}
         self.messages = messages
         self.programs = programs
 
@@ -221,7 +221,8 @@ class Generator(object):
         args = program.args.eval()
 
         # Update queue_usage
-        self.queue_usage[program.queue.eval()] += int(self.is_program_sender(direction))
+        if self.is_program_sender(direction):
+            self.queue_usage[program.queue.eval()].append(program_name)
 
         assert len(args) == 1, "Multiple arguments have been deprecated"
         message = self.messages[args[0]]

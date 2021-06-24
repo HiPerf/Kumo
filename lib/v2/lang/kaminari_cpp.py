@@ -474,7 +474,7 @@ class LangGenerator(generator.Generator):
         queue = self.queues[program.queue.eval()]
         if queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
             args = queue.specifier.args
-            message_name = args[0].eval()
+            message_name = args[1].eval()
 
         method.append(gen.Statement(f'::kumo::{message_name} data'))
         method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
@@ -584,11 +584,15 @@ class LangGenerator(generator.Generator):
                 queue_packer = queue.specifier.args.eval()
 
             elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
-                queue_packer = 'unique_merge_packer'
-                args = queue.specifier.args
-                program_name = args[2].eval()
+                num_programs = len(self.queue_usage[queue_name])
+                if num_programs > 1:
+                    raise RuntimeError('Eventually synced queues can be used only in one program')
 
-                queue_packer_template = f'<uint64_t, {args[0].eval()}, {args[1].eval()}, static_cast<uint16_t>(::kumo::opcode::{program_name}), ::kumo::marshal, {queue_name.capitalize()}Allocator>'
+                queue_packer = args[0].eval()
+                args = queue.specifier.args
+                program_name = self.queue_usage[queue_name][0]
+
+                queue_packer_template = f'<uint64_t, {args[1].eval()}, {args[2].eval()}, static_cast<uint16_t>(::kumo::opcode::{program_name}), ::kumo::marshal, {queue_name.capitalize()}Allocator>'
 
             queue_packer = queue_packer + queue_packer_template
             if queue.base.argument is not None:
@@ -708,6 +712,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <kaminari/packers/most_recent_packer_by_opcode.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/packers/ordered_packer.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/packers/unique_merge_packer.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/packers/vector_merge_packer.hpp>', ending=''),
                 kaminari_fwd([
                     gen.Statement('namespace buffers', ending=''),
                     gen.Block([
