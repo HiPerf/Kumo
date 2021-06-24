@@ -712,7 +712,7 @@ class LangGenerator(generator.Generator):
                 kaminari_fwd([
                     gen.Statement('namespace detail', ending=''),
                     gen.Block([
-                        gen.Statement('using packets_by_block = std::map<uint32_t, std::vector<boost::intrusive_ptr<packet>>>')
+                        gen.Statement('using packets_by_block = std::map<uint32_t, std::vector<boost::intrusive_ptr<buffers::packet>>>')
                     ])
                 ])
             ]))
