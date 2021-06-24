@@ -532,7 +532,7 @@ class LangGenerator(generator.Generator):
 
         # Protocol queues
         # for each queue we need a template allocator
-        template_names = [f'{queue_name.capitalize()}Allocator' for queue_name, queue in self.queues.items()]
+        template_names = [f'{queue_name.capitalize()}Allocator' for queue_name, _ in self.queues.items() if self.queue_usage[queue_name]]
         template = 'template <class ' + ', class '.join(template_names) + '>'
 
         queues = gen.Class('protocol_queues', cpp_style=True, template=(gen.Statement(template, ending=''), template_names))
