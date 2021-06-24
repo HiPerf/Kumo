@@ -210,6 +210,14 @@ class Generator(object):
                 packer_or_unpacker(dependent_message)
                 self.generate_message_size(dependent_message)
 
+    def check_program_usage(self, program):
+        program_name = program.name.eval()
+        direction = program.direction.eval()
+
+        # Update queue_usage
+        if self.is_program_sender(direction):
+            self.queue_usage[program.queue.eval()].append(program_name)
+
     def generate_program(self, program):
         program_name = program.name.eval()
 
@@ -219,10 +227,6 @@ class Generator(object):
         # Message packer/unpacker according to direction
         direction = program.direction.eval()
         args = program.args.eval()
-
-        # Update queue_usage
-        if self.is_program_sender(direction):
-            self.queue_usage[program.queue.eval()].append(program_name)
 
         assert len(args) == 1, "Multiple arguments have been deprecated"
         message = self.messages[args[0]]
@@ -256,6 +260,11 @@ class Generator(object):
         self.generated_programs.append(program_name)
 
     def generate(self, version):
+        # First pass is usage only
+        for program in self.programs.values():
+            self.check_program_usage(program)
+
+        # Second pass is actual generation
         for program in self.programs.values():
             self.generate_program(program)
 
