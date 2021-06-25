@@ -750,10 +750,10 @@ class LangGenerator(generator.Generator):
                 queue_packer_base = queue.specifier.args.eval()
                 queue_packer = f'Kaminari.{to_camel_case(queue_packer_base)}'
 
-                if queue_packer_base == 'most_recent_by_opcode':
+                if queue_packer_base == 'most_recent_packer_by_opcode':
                     queue_base = queue_base + '_by_opcode'
                     queue_packer_template = queue_packer
-                elif queue_packer_base == 'most_recent_with_id':
+                elif queue_packer_base == 'most_recent_packer_with_id':
                     queue_base = queue_base + '_with_id'
                     queue_packer_template = queue_packer
                 else:
