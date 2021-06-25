@@ -747,8 +747,17 @@ class LangGenerator(generator.Generator):
             queue_packer_args = ''
 
             if queue.specifier.queue_type == boxes.QueueSpecifierType.SPECIALIZED:
-                queue_packer = f'Kaminari.{to_camel_case(queue.specifier.args.eval())}'
-                queue_packer_template = f'{queue_packer}, Kaminari.Packet'
+                queue_packer_base = queue.specifier.args.eval()
+                queue_packer = f'Kaminari.{to_camel_case(queue_packer_base)}'
+
+                if queue_packer_base == 'most_recent_by_opcode':
+                    queue_base = queue_base + '_by_opcode'
+                    queue_packer_template = queue_packer
+                elif queue_packer_base == 'most_recent_with_id':
+                    queue_base = queue_base + '_with_id'
+                    queue_packer_template = queue_packer
+                else:
+                    queue_packer_template = f'{queue_packer}, Kaminari.Packet'
 
             elif queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
                 num_programs = len(self.queue_usage[queue_name])
