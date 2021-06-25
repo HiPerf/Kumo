@@ -563,7 +563,6 @@ class LangGenerator(generator.Generator):
                 ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
                 methods.append(method)
 
-                method.append(gen.Statement('broadcaster.broadcast(new IBroadcastOperation<ProtocolQueues>() {', ending=''))
                 method.append(gen.Statement(f'broadcaster.broadcast((ProtocolQueues pq) => pq.send{to_camel_case(queue)}((ushort)Opcodes.opcode{to_camel_case(program_name)}, data))'))
             
         for method in methods:
