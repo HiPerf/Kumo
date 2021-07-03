@@ -65,6 +65,7 @@ class LangGenerator(generator.Generator):
         self.marshal_file = File(namespace='Kumo')
         self.client_file = File(namespace='Kumo')
         self.opcodes_file = File(namespace='Kumo')
+        self.unsafe_rpc_file = File(namespace='Kumo')
         self.rpc_file = File(namespace='Kumo')
         self.queues_file = File(namespace='Kumo')
         self.config_file = File(namespace='Kumo')
@@ -85,6 +86,9 @@ class LangGenerator(generator.Generator):
         self.client_file.add(self.client_itf)
 
         # RPC class
+        self.unsafe_rpc_cls = gen.Class('Unsafe', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
+        self.unsafe_rpc_file.add(self.unsafe_rpc_cls)
+        
         self.rpc_cls = gen.Class('Rpc', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
         self.rpc_file.add(self.rpc_cls)
 
@@ -499,6 +503,9 @@ class LangGenerator(generator.Generator):
         pass
 
     def _generate_program_send(self, program: boxes.ProgramBox):
+        return self._generate_unsafe_send(program) + self._generate_safe_send(program)
+
+    def _generate_unsafe_send(self, program: boxes.ProgramBox):
         # Helpers
         program_name = program.name.eval()
         queue = program.queue.eval()
@@ -564,6 +571,77 @@ class LangGenerator(generator.Generator):
                 methods.append(method)
 
                 method.append(gen.Statement(f'broadcaster.broadcast((ProtocolQueues pq) => pq.send{to_camel_case(queue)}((ushort)Opcodes.opcode{to_camel_case(program_name)}, data))'))
+            
+        for method in methods:
+            self.unsafe_rpc_cls.methods.append(method)
+
+        return methods
+
+    def _generate_safe_send(self, program: boxes.ProgramBox):
+        # Helpers
+        program_name = program.name.eval()
+        queue = program.queue.eval()
+        args = program.args.eval()
+        message_name = to_camel_case(args[0])
+
+        # Returned methods
+        methods = []
+
+        # Create methods
+        if self.can_queue_have_callback(self.queues[queue]):
+            method = gen.Method('void', f'send{to_camel_case(program_name)}', [
+                gen.Variable(f'Kaminari.Client<ProtocolQueues>', 'client'),
+                gen.Variable(f'{message_name}', 'data'),
+                gen.Variable('Action', 'callback')
+            ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
+            method.append(gen.Statement(f'client.getProtocol().getPhaseSync().OneShot(() => Kumo.Unsafe.send{to_camel_case(program_name)}(client.getSuperPacket().getQueues(), data, callback))'))
+            methods.append(method)
+        
+        # Standard no callback method
+        method = gen.Method('void', f'send{to_camel_case(program_name)}', [
+            gen.Variable(f'Kaminari.Client<ProtocolQueues>', 'client'),
+            gen.Variable(f'{message_name}', 'data')
+        ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
+        method.append(gen.Statement(f'client.getProtocol().getPhaseSync().OneShot(() => Kumo.Unsafe.send{to_camel_case(program_name)}(client.getSuperPacket().getQueues(), data))'))
+        methods.append(method)
+        
+        # There are two types of broadcasts, one that implies neighbouring areas
+        # and one that doesn't, generate both
+        for suffix in ('', 'Single'):
+            if self.has_queue_packed_add(self.queues[queue]):
+                
+                if self.can_queue_have_callback(self.queues[queue]):
+                    method = gen.Method('void', f'broadcast{to_camel_case(program_name)}{suffix}', [
+                        gen.Variable(f'Kaminari.Client<ProtocolQueues>', 'client'),
+                        gen.Variable('Kaminari.IBroadcaster<ProtocolQueues>', 'broadcaster'),
+                        gen.Variable(f'{message_name}', 'data'),
+                        gen.Variable('Action', 'callback')
+                    ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
+                    methods.append(method)
+
+                    method.append(gen.Statement(f'client.getProtocol().getPhaseSync().OneShot(() => Kumo.Unsafe.broadcast{to_camel_case(program_name)}{suffix}(broadcaster, data, callback))'))
+                
+                # No callback
+                method = gen.Method('void', f'broadcast{to_camel_case(program_name)}{suffix}', [
+                    gen.Variable(f'Kaminari.Client<ProtocolQueues>', 'client'),
+                    gen.Variable('Kaminari.IBroadcaster<ProtocolQueues>', 'broadcaster'),
+                    gen.Variable(f'{message_name}', 'data')
+                ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
+                methods.append(method)
+
+                method.append(gen.Statement(f'client.getProtocol().getPhaseSync().OneShot(() => Kumo.Unsafe.broadcast{to_camel_case(program_name)}{suffix}(broadcaster, data))'))
+
+            else:
+                # Adding by bare data is always available
+                # But we can not have callbacks YET
+                method = gen.Method('void', f'broadcast{to_camel_case(program_name)}{suffix}', [
+                    gen.Variable(f'Kaminari.Client<ProtocolQueues>', 'client'),
+                    gen.Variable('Kaminari.IBroadcaster<ProtocolQueues>', 'broadcaster'),
+                    gen.Variable(f'{message_name}', 'data')
+                ], visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
+                methods.append(method)
+
+                method.append(gen.Statement(f'client.getProtocol().getPhaseSync().OneShot(() => Kumo.Unsafe.broadcast{to_camel_case(program_name)}{suffix}(broadcaster, data))'))
             
         for method in methods:
             self.rpc_cls.methods.append(method)
@@ -833,6 +911,11 @@ class LangGenerator(generator.Generator):
 
         with open(f'{path}/Marshal.cs', 'w') as fp:
             fp.write(self.marshal_file.source())
+
+        with open(f'{path}/Unsafe.cs', 'w') as fp:
+            fp.write(self.unsafe_rpc_file.source([
+                gen.Statement('using System')
+            ]))
 
         with open(f'{path}/Rpc.cs', 'w') as fp:
             fp.write(self.rpc_file.source([
