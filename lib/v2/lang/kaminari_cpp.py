@@ -406,7 +406,7 @@ class LangGenerator(generator.Generator):
 
                     method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::buffers::packet> packet = ::kaminari::buffers::packet::make((uint16_t)opcode::{program_name}, std::forward<T>(callback))'))
                     method.append(gen.Statement(f'::kumo::marshal::pack(packet, data)'))
-                    method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
+                    method.append(gen.Statement(f'broadcaster->broadcast{suffix}([packet](auto pq) {{', ending=''))
                     method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
                     method.append(gen.Statement(f'}})'))
                 
@@ -418,7 +418,7 @@ class LangGenerator(generator.Generator):
 
                 method.append(gen.Statement(f'boost::intrusive_ptr<::kaminari::buffers::packet> packet = ::kaminari::buffers::packet::make((uint16_t)opcode::{program_name})'))
                 method.append(gen.Statement(f'::kumo::marshal::pack(packet, data)'))
-                method.append(gen.Statement(f'broadcaster->broadcast([packet](auto pq) {{', ending=''))
+                method.append(gen.Statement(f'broadcaster->broadcast{suffix}([packet](auto pq) {{', ending=''))
                 method.append(gen.Scope([gen.Statement(f'pq->send_{queue}(packet)')], True))
                 method.append(gen.Statement(f'}})'))
 
@@ -431,7 +431,7 @@ class LangGenerator(generator.Generator):
                 ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B>', ending=''))
                 methods.append(method)
 
-                method.append(gen.Statement(f'broadcaster->broadcast([data = std::move(data)](auto pq) {{', ending=''))
+                method.append(gen.Statement(f'broadcaster->broadcast{suffix}([data = std::move(data)](auto pq) {{', ending=''))
                 method.append(gen.Scope([
                     # Do not move data here, we need it further down in subsequent calls
                     gen.Statement(f'pq->send_{queue}(opcode::{program_name}, data)')
