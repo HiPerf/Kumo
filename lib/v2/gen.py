@@ -72,6 +72,9 @@ class Concept(Scope):
         # Do nothing
         return ''
 
+    def instance(self, level, eval_fn=None):
+        return ''
+
 class Block(Scope):
     def __init__(self, content=[], ending=''):
         super().__init__(content)

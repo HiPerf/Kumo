@@ -111,7 +111,7 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PROTECTED, template=gen.Statement('template <typename T>', ending=''), decl_modifiers=['inline'])
         self.marshal_cls.methods.append(method)
         
-        method.append(gen.Statement('return !buffer.empty() && cx::overflow::le(buffer.front().block_id, cx::overflow::sub(block_id, buffer_size))'))
+        method.append(gen.Statement('return !buffer.empty() && cx::overflow::le(buffer.front().block_id, cx::overflow::sub(block_id, static_cast<uint16_t>(buffer_size)))'))
 
         # Add struct and class
         self.marshal_file.add(data_struct)
@@ -548,8 +548,7 @@ class LangGenerator(generator.Generator):
     def _generate_program_recv(self, program: boxes.ProgramBox):
         # Helpers
         program_name = program.name.eval()
-        args = program.args.eval()
-        message_name = args[0]
+        message_name = self.get_program_message(program)
 
         method = gen.Method('bool', f'handle_{program_name}', [
             gen.Variable('C*', 'client'),
@@ -572,26 +571,19 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()))')
             ]))
         
-        # Templated queues work by filling vectors
-        queue = self.queues[program.queue.eval()]
-        if queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
-            args = queue.specifier.args
-            message_name = args[1].eval()
-
         method.append(gen.Statement(f'if (cx::overflow::leq(block_id, _{program_name}_last_called))', ending=''))
         method.append(gen.Block([
             gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
             gen.Statement('return true')
         ]))
 
-        method.append(gen.Statement(f'_{program_name}_last_called = block_id'))
-        method.append(gen.Statement(f'auto& data = emplace_data(_{message_name}, block_id, packet->timestamp())'))
+        method.append(gen.Statement(f'auto& data = emplace_data(_{program_name}, block_id, packet->timestamp())'))
         method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
         method.append(gen.Block([
             gen.Statement('return false')
         ]))
 
-        method.append(gen.Statement(f'if constexpr (has_peek_{program_name})'))
+        method.append(gen.Statement(f'if constexpr (has_peek_{program_name}<marshal>)', ending=''))
         method.append(gen.Block([
             gen.Statement(f'if (cx::overflow::ge(block_id, _{program_name}_last_peeked))', ending=''),
             gen.Block([
@@ -605,17 +597,18 @@ class LangGenerator(generator.Generator):
         self.handler_programs.add(program_name)
         self.marshal_cls.methods.append(method)
 
-        self.marshal_cls.attributes.append(gen.Attribute(f'boost::circular_buffer<::kumo::data_buffer<::kumo::{message_name}>>', f'_{message_name}'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'uint8_t', f'_{message_name}_buffer_size'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{message_name}_last_peeked'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{message_name}_last_called'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'boost::circular_buffer<::kumo::data_buffer<::kumo::{message_name}>>', f'_{program_name}'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'uint8_t', f'_{program_name}_buffer_size'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_last_peeked'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_last_called'))
 
         # Concepts
         self.marshal_file.add_first(gen.Concept([
-            gen.Statement(f'concept has_peek_{program_name} = requires(marshal m, {message_name} d)'),
+            gen.Statement('template <typename M>', ending=''),
+            gen.Statement(f'concept has_peek_{program_name} = requires(M m, {message_name} d)', ending=''),
             gen.Block([
-                gen.Statement(f'{{ d.peek_{program_name}(nullptr, nullptr, d) }} -> bool')
-            ])
+                gen.Statement(f'{{ m.peek_{program_name}(nullptr, nullptr, d) }} ')
+            ], ending=';')
         ]))
         
         return [method]
@@ -654,7 +647,10 @@ class LangGenerator(generator.Generator):
 
         # Generated constructor and update methods
         marshal_constructor = gen.Constructor('', 'marshal', visibility=gen.Visibility.PUBLIC)
-        marshal_update = gen.Method('void', 'update', [gen.Variable('uint16_t', 'block_id')], visibility=gen.Visibility.PUBLIC)
+        marshal_update = gen.Method('void', 'update', [
+            gen.Variable('C*', 'client'),
+            gen.Variable('uint16_t', 'block_id')
+        ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PUBLIC)
 
         self.marshal_cls.methods.append(marshal_constructor)
         self.marshal_cls.methods.append(marshal_update)
@@ -670,8 +666,10 @@ class LangGenerator(generator.Generator):
             # Update method
             marshal_update.append(gen.Statement(f'while (check_buffer(_{x}, block_id, _{x}_buffer_size))', ending=''))
             marshal_update.append(gen.Block([
-                gen.Statement(f'on_{x}(client, _{x}.front().data, _{x}.front().timestamp)'),
-                gen.Statement(f'{x}.pop_front()')
+                gen.Statement(f'auto& data = _{x}.front()'),
+                gen.Statement(f'on_{x}(client, data.data, data.timestamp)'),
+                gen.Statement(f'_{x}_last_called = data.block_id'),
+                gen.Statement(f'_{x}.pop_front()')
             ]))
         
         # Opcodes enum

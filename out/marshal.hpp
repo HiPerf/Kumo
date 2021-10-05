@@ -181,7 +181,7 @@ namespace kumo
     template <typename T>
     inline bool marshal::check_buffer(boost::circular_buffer<data_buffer<T>>& buffer, uint16_t block_id, uint8_t buffer_size)
     {
-        return !buffer.empty() && cx::overflow::le(buffer.front().block_id, cx::overflow::sub(block_id, buffer_size));
+        return !buffer.empty() && cx::overflow::le(buffer.front().block_id, cx::overflow::sub(block_id, static_cast<uint16_t>(buffer_size)));
     }
     template <typename C>
     bool marshal::handle_create_character(C* client, ::kaminari::buffers::packet_reader* packet, uint16_t block_id)
@@ -396,18 +396,18 @@ namespace kumo
     {
         switch (static_cast<::kumo::opcode>(packet->opcode()))
         {
-            case opcode::login:
-                return handle_login(client, packet, block_id);
+            case opcode::create_character:
+                return handle_create_character(client, packet, block_id);
+            case opcode::client_update:
+                return handle_client_update(client, packet, block_id);
+            case opcode::handshake:
+                return handle_handshake(client, packet, block_id);
             case opcode::move:
                 return handle_move(client, packet, block_id);
             case opcode::login_character:
                 return handle_login_character(client, packet, block_id);
-            case opcode::create_character:
-                return handle_create_character(client, packet, block_id);
-            case opcode::handshake:
-                return handle_handshake(client, packet, block_id);
-            case opcode::client_update:
-                return handle_client_update(client, packet, block_id);
+            case opcode::login:
+                return handle_login(client, packet, block_id);
             default:
                 return false;
         }

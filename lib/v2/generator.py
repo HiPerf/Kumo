@@ -131,7 +131,14 @@ class Generator(object):
 
     def get_program_message(self, program):
         args = program.args.eval()
-        return args[0]
+        message_name = args[0]
+        
+        queue = self.queues[program.queue.eval()]
+        if queue.specifier.queue_type == QueueSpecifierType.TEMPLATED:
+            args = queue.specifier.args
+            message_name = args[1].eval()
+
+        return message_name
 
     def message_inherits_from(self, message, inherits):
         if message.name.eval() == inherits:
