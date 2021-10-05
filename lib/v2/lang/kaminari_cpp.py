@@ -28,6 +28,9 @@ class File(object):
     def add(self, code):
         self.sources.append(code)
 
+    def add_first(self, code):
+        self.sources.insert(0, code)
+
     def _root(self, prepend: list):
         if self.namespace is not None:
             return gen.Scope(prepend + [
@@ -75,6 +78,43 @@ class LangGenerator(generator.Generator):
         base_name = self.config.get('marshal', {}).get('base')
         base_name = '' if not base_name else f':public {base_name}'
         self.marshal_cls = gen.Class('marshal', decl_name_base=base_name, cpp_style=True)
+        
+        data_struct = gen.Class('data_buffer', keyword='struct', cpp_style=True, template=(gen.Statement('template <typename T>', ending=''), 'T'))
+        data_struct.attributes.append(gen.Attribute('T', 'data', visibility=gen.Visibility.PUBLIC))
+        data_struct.attributes.append(gen.Attribute('uint16_t', 'block_id', visibility=gen.Visibility.PUBLIC))
+        data_struct.attributes.append(gen.Attribute('uint64_t', 'timestamp', visibility=gen.Visibility.PUBLIC))
+
+        # Helper method for marhsal
+        method = gen.Method('T&', f'emplace_data', [
+            gen.Variable('boost::circular_buffer<data_buffer<T>>&', 'buffer'),
+            gen.Variable('uint16_t', 'block_id'),
+            gen.Variable('uint64_t', 'timestamp')
+        ], visibility=gen.Visibility.PROTECTED, template=gen.Statement('template <typename T>', ending=''), decl_modifiers=['inline'])
+        self.marshal_cls.methods.append(method)
+        
+        method.append(gen.Statement('auto it = buffer.begin()'))
+        method.append(gen.Statement('while(it != buffer.end())', ending=''))
+        method.append(gen.Block([
+            gen.Statement('if (it->block_id > block_id)', ending=''),
+            gen.Block([
+                gen.Statement('break')
+            ]),
+            gen.Statement('++it')
+        ]))
+        method.append(gen.Statement('return buffer.insert(it, { .block_id = block_id, .timestamp = timestamp })->data'))
+
+        # Helper method for marhsal
+        method = gen.Method('bool', f'check_buffer', [
+            gen.Variable('boost::circular_buffer<data_buffer<T>>&', 'buffer'),
+            gen.Variable('uint16_t', 'block_id'),
+            gen.Variable('uint8_t', 'buffer_size')
+        ], visibility=gen.Visibility.PROTECTED, template=gen.Statement('template <typename T>', ending=''), decl_modifiers=['inline'])
+        self.marshal_cls.methods.append(method)
+        
+        method.append(gen.Statement('return !buffer.empty() && cx::overflow::le(buffer.front().block_id, cx::overflow::sub(block_id, buffer_size))'))
+
+        # Add struct and class
+        self.marshal_file.add(data_struct)
         self.marshal_file.add(self.marshal_cls)
 
     def _base_message_fields(self, base):
@@ -512,9 +552,10 @@ class LangGenerator(generator.Generator):
         message_name = args[0]
 
         method = gen.Method('bool', f'handle_{program_name}', [
+            gen.Variable('C*', 'client'),
             gen.Variable('::kaminari::buffers::packet_reader*', 'packet'),
-            gen.Variable('C*', 'client')
-        ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PRIVATE, decl_modifiers=['static'])
+            gen.Variable('uint16_t', 'block_id'),
+        ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PRIVATE)
 
         if program.cond.attr is not None:
             attr = program.cond.attr.eval()
@@ -537,17 +578,46 @@ class LangGenerator(generator.Generator):
             args = queue.specifier.args
             message_name = args[1].eval()
 
-        method.append(gen.Statement(f'::kumo::{message_name} data'))
+        method.append(gen.Statement(f'if (cx::overflow::leq(block_id, _{program_name}_last_called))', ending=''))
+        method.append(gen.Block([
+            gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
+            gen.Statement('return true')
+        ]))
+
+        method.append(gen.Statement(f'_{program_name}_last_called = block_id'))
+        method.append(gen.Statement(f'auto& data = emplace_data(_{message_name}, block_id, packet->timestamp())'))
         method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
         method.append(gen.Block([
             gen.Statement('return false')
         ]))
 
-        method.append(gen.Statement(f'return on_{program_name}(client, data, packet->timestamp())'))
+        method.append(gen.Statement(f'if constexpr (has_peek_{program_name})'))
+        method.append(gen.Block([
+            gen.Statement(f'if (cx::overflow::ge(block_id, _{program_name}_last_peeked))', ending=''),
+            gen.Block([
+                gen.Statement(f'_{program_name}_last_peeked = block_id'),
+                gen.Statement(f'return peek_{program_name}(client, data, packet->timestamp())')
+            ])
+        ]))
+
+        method.append(gen.Statement('return true'))
 
         self.handler_programs.add(program_name)
         self.marshal_cls.methods.append(method)
 
+        self.marshal_cls.attributes.append(gen.Attribute(f'boost::circular_buffer<::kumo::data_buffer<::kumo::{message_name}>>', f'_{message_name}'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'uint8_t', f'_{message_name}_buffer_size'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{message_name}_last_peeked'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{message_name}_last_called'))
+
+        # Concepts
+        self.marshal_file.add_first(gen.Concept([
+            gen.Statement(f'concept has_peek_{program_name} = requires(marshal m, {message_name} d)'),
+            gen.Block([
+                gen.Statement(f'{{ d.peek_{program_name}(nullptr, nullptr, d) }} -> bool')
+            ])
+        ]))
+        
         return [method]
 
     def _generate_internals(self):
@@ -560,16 +630,17 @@ class LangGenerator(generator.Generator):
 
         # General packet handler
         method = gen.Method('bool', 'handle_packet', [
+            gen.Variable('C*', 'client'),
             gen.Variable('::kaminari::buffers::packet_reader*', 'packet'),
-            gen.Variable('C*', 'client')
-        ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PUBLIC, decl_modifiers=['static'])
+            gen.Variable('uint16_t', 'block_id')
+        ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PUBLIC)
 
         method.append(gen.Statement('switch (static_cast<::kumo::opcode>(packet->opcode()))', ending=''))
         method.append(gen.Block([
             gen.Scope([
                 gen.Statement(f'case opcode::{program}:', ending=''),
                 gen.Scope([
-                    gen.Statement(f'return handle_{program}(packet, client)') 
+                    gen.Statement(f'return handle_{program}(client, packet, block_id)') 
                 ], indent=True)
             ]) for program in self.handler_programs
         ] + [gen.Scope([
@@ -581,6 +652,28 @@ class LangGenerator(generator.Generator):
 
         self.marshal_cls.methods.append(method)
 
+        # Generated constructor and update methods
+        marshal_constructor = gen.Constructor('', 'marshal', visibility=gen.Visibility.PUBLIC)
+        marshal_update = gen.Method('void', 'update', [gen.Variable('uint16_t', 'block_id')], visibility=gen.Visibility.PUBLIC)
+
+        self.marshal_cls.methods.append(marshal_constructor)
+        self.marshal_cls.methods.append(marshal_update)
+
+        buffer_size = self.config.get("buffer_size", 2)
+        for x in self.recv_list:
+            # Constructor initializer
+            marshal_constructor.initializers.append(gen.Statement(f'_{x}({buffer_size * 2})', ending=''))
+            marshal_constructor.initializers.append(gen.Statement(f'_{x}_buffer_size({buffer_size})', ending=''))
+            marshal_constructor.initializers.append(gen.Statement(f'_{x}_last_peeked(0)', ending=''))
+            marshal_constructor.initializers.append(gen.Statement(f'_{x}_last_called(0)', ending=''))
+
+            # Update method
+            marshal_update.append(gen.Statement(f'while (check_buffer(_{x}, block_id, _{x}_buffer_size))', ending=''))
+            marshal_update.append(gen.Block([
+                gen.Statement(f'on_{x}(client, _{x}.front().data, _{x}.front().timestamp)'),
+                gen.Statement(f'{x}.pop_front()')
+            ]))
+        
         # Opcodes enum
         opcodes = gen.Scope([
             gen.Statement('enum class opcode', ending=''),
@@ -715,6 +808,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/cx/overflow.hpp>', ending=''),
                 *marshal_include
             ]))
 

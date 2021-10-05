@@ -5,27 +5,50 @@
 #include <inttypes.h>
 namespace kumo
 {
+    struct creation_data;
+    struct character_selection;
+    struct client_data;
     struct client_handshake;
     struct status;
     struct login_data;
     struct status_ex;
-    struct characters;
+    struct characters_list_data;
     struct character;
-    struct character_selection;
     struct success;
     struct complex;
     struct has_id;
     struct spawn_data;
-    struct movement;
-    struct player_data;
+    struct position;
+    struct character_spawn_data;
     struct spawn;
     struct despawn;
     struct entity_update;
+    struct self_update;
     struct world_update_data;
 }
 
 namespace kumo
 {
+    struct creation_data
+    {
+    public:
+        std::string name;
+    };
+
+    struct character_selection
+    {
+    public:
+        uint8_t index;
+    };
+
+    struct client_data
+    {
+    public:
+        int8_t x;
+        int8_t y;
+        uint8_t seq;
+    };
+
     struct client_handshake
     {
     public:
@@ -54,10 +77,10 @@ namespace kumo
         uint8_t code;
     };
 
-    struct characters
+    struct characters_list_data
     {
     public:
-        std::vector<character> list;
+        uint8_t num_characters;
     };
 
     struct character
@@ -65,12 +88,6 @@ namespace kumo
     public:
         std::string name;
         uint16_t level;
-    };
-
-    struct character_selection
-    {
-    public:
-        uint8_t index;
     };
 
     struct success
@@ -100,23 +117,25 @@ namespace kumo
         int8_t y;
     };
 
-    struct movement
-    {
-    public:
-        int8_t direction;
-    };
-
-    struct player_data
+    struct position
     {
     public:
         uint64_t id;
-        std::string name;
+        float x;
+        float z;
+    };
+
+    struct character_spawn_data
+    {
+    public:
+        uint64_t id;
     };
 
     struct spawn
     {
     public:
         uint64_t id;
+        uint16_t type;
         float x;
         float z;
     };
@@ -133,7 +152,21 @@ namespace kumo
         uint64_t id;
         float x;
         float z;
-        float angle;
+        float speed;
+        float vx;
+        float vz;
+    };
+
+    struct self_update
+    {
+    public:
+        float x;
+        float z;
+        float speed;
+        float vx;
+        float vz;
+        uint8_t seq;
+        uint16_t frame;
     };
 
     struct world_update_data

@@ -64,6 +64,14 @@ class Scope(list):
     def __str__(self):
         return self.decl(0)
 
+class Concept(Scope):
+    def __init__(self, content=[], indent=False):
+        super().__init__(content, indent)
+
+    def decl(self, level, eval_fn=None, no_newline=False):
+        # Do nothing
+        return ''
+
 class Block(Scope):
     def __init__(self, content=[], ending=''):
         super().__init__(content)

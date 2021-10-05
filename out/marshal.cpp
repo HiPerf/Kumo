@@ -3,91 +3,31 @@
 #include <kaminari/buffers/packet_reader.hpp>
 namespace kumo
 {
-    void marshal::pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const client_handshake& data)
+    concept has_peek_move = requires(marshal m, position d);
     {
-        *packet << data.version;
+        { d.peek_move(nullptr, nullptr, d) } -> bool;
     }
-    uint8_t marshal::packet_size(const client_handshake& data)
+    concept has_peek_login_character = requires(marshal m, character_selection d);
     {
-        (void)data;
-        return sizeof(client_handshake);
+        { d.peek_login_character(nullptr, nullptr, d) } -> bool;
     }
-    uint8_t marshal::sizeof_client_handshake()
+    concept has_peek_login = requires(marshal m, login_data d);
     {
-        return sizeof(client_handshake);
+        { d.peek_login(nullptr, nullptr, d) } -> bool;
     }
-    bool marshal::unpack(::kaminari::packet_reader* packet, status& data)
+    concept has_peek_handshake = requires(marshal m, client_handshake d);
     {
-        if (packet->bytes_read() + sizeof_bool() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.success = packet->read<bool>();
-        return true;
+        { d.peek_handshake(nullptr, nullptr, d) } -> bool;
     }
-    uint8_t marshal::packet_size(const status& data)
+    concept has_peek_client_update = requires(marshal m, client_data d);
     {
-        (void)data;
-        return sizeof(status);
+        { d.peek_client_update(nullptr, nullptr, d) } -> bool;
     }
-    uint8_t marshal::sizeof_status()
+    concept has_peek_create_character = requires(marshal m, creation_data d);
     {
-        return sizeof(status);
+        { d.peek_create_character(nullptr, nullptr, d) } -> bool;
     }
-    void marshal::pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const login_data& data)
-    {
-        *packet << data.username;
-        *packet << data.password0;
-        *packet << data.password1;
-        *packet << data.password2;
-        *packet << data.password3;
-    }
-    uint8_t marshal::packet_size(const login_data& data)
-    {
-        uint8_t size = 0;
-        size += sizeof_uint8() + data.username.length();
-        size += sizeof_uint64();
-        size += sizeof_uint64();
-        size += sizeof_uint64();
-        size += sizeof_uint64();
-        return size;
-    }
-    bool marshal::unpack(::kaminari::packet_reader* packet, status_ex& data)
-    {
-        if (packet->bytes_read() + sizeof_uint8() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.code = packet->read<uint8_t>();
-        return true;
-    }
-    uint8_t marshal::packet_size(const status_ex& data)
-    {
-        (void)data;
-        return sizeof(status_ex);
-    }
-    uint8_t marshal::sizeof_status_ex()
-    {
-        return sizeof(status_ex);
-    }
-    bool marshal::unpack(::kaminari::packet_reader* packet, characters& data)
-    {
-        uint8_t size = packet->read<uint8_t>();
-        for (int i = 0; i < size; ++i)
-        {
-            character data;
-            if (unpack(packet, data)
-            {
-                (data.list).push_back(std::move(data));
-            }
-            else;
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-    bool marshal::unpack(::kaminari::packet_reader* packet, character& data)
+    bool marshal::unpack(::kaminari::buffers::packet_reader* packet, creation_data& data)
     {
         if (packet->bytes_read() + sizeof_uint8() > packet->buffer_size())
         {
@@ -98,31 +38,15 @@ namespace kumo
             return false;
         }
         data.name = packet->read<std::string>();
-        if (packet->bytes_read() + sizeof_uint16() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.level = packet->read<uint16_t>();
         return true;
     }
-    uint8_t marshal::packet_size(const character& data)
+    uint8_t marshal::packet_size(const creation_data& data)
     {
         uint8_t size = 0;
         size += sizeof_uint8() + data.name.length();
-        size += sizeof_uint16();
         return size;
     }
-    uint8_t marshal::packet_size(const characters& data)
-    {
-        uint8_t size = 0;
-        size += sizeof(uint8_t);
-        for (const character& val : data.list)
-        {
-            size += packet_size(val);
-        }
-        return size;
-    }
-    void marshal::pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const character_selection& data)
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const character_selection& data)
     {
         *packet << data.index;
     }
@@ -135,76 +59,8 @@ namespace kumo
     {
         return sizeof(character_selection);
     }
-    bool marshal::unpack(::kaminari::packet_reader* packet, success& data)
+    bool marshal::unpack(::kaminari::buffers::packet_reader* packet, client_data& data)
     {
-        return true;
-    }
-    uint8_t marshal::packet_size(const success& data)
-    {
-        (void)data;
-        return sizeof(success);
-    }
-    uint8_t marshal::sizeof_success()
-    {
-        return sizeof(success);
-    }
-    bool marshal::unpack(::kaminari::packet_reader* packet, complex& data)
-    {
-        if (packet->bytes_read() + sizeof(bool) > packet->buffer_size())
-        {
-            return false;
-        }
-        if (packet->read<uint8_t>() == 1)
-        {
-            if (packet->bytes_read() + sizeof_uint32() > packet->buffer_size())
-            {
-                return false;
-            }
-            *data.x = packet->read<uint32_t>();
-        }
-        uint8_t size = packet->read<uint8_t>();
-        for (int i = 0; i < size; ++i)
-        {
-            spawn_data data;
-            if (unpack(packet, data)
-            {
-                (data.y).push_back(std::move(data));
-            }
-            else;
-            {
-                return false;
-            }
-        }
-        if (packet->bytes_read() + sizeof_int32() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.z = packet->read<int32_t>();
-        if (packet->bytes_read() + sizeof(bool) > packet->buffer_size())
-        {
-            return false;
-        }
-        if (packet->read<uint8_t>() == 1)
-        {
-            uint8_t size = packet->read<uint8_t>();
-            if (packet->bytes_read() + size * sizeof_bool() > packet->buffer_size())
-            {
-                return false;
-            }
-            for (int i = 0; i < size; ++i)
-            {
-                (*data.w).push_back(packet->read<bool>());
-            }
-        }
-        return true;
-    }
-    bool marshal::unpack(::kaminari::packet_reader* packet, spawn_data& data)
-    {
-        if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.id = packet->read<uint64_t>();
         if (packet->bytes_read() + sizeof_int8() > packet->buffer_size())
         {
             return false;
@@ -215,7 +71,183 @@ namespace kumo
             return false;
         }
         data.y = packet->read<int8_t>();
+        if (packet->bytes_read() + sizeof_uint8() > packet->buffer_size())
+        {
+            return false;
+        }
+        data.seq = packet->read<uint8_t>();
         return true;
+    }
+    uint8_t marshal::packet_size(const client_data& data)
+    {
+        (void)data;
+        return sizeof(client_data);
+    }
+    uint8_t marshal::sizeof_client_data()
+    {
+        return sizeof(client_data);
+    }
+    bool marshal::unpack(::kaminari::buffers::packet_reader* packet, client_handshake& data)
+    {
+        if (packet->bytes_read() + sizeof_uint32() > packet->buffer_size())
+        {
+            return false;
+        }
+        data.version = packet->read<uint32_t>();
+        return true;
+    }
+    uint8_t marshal::packet_size(const client_handshake& data)
+    {
+        (void)data;
+        return sizeof(client_handshake);
+    }
+    uint8_t marshal::sizeof_client_handshake()
+    {
+        return sizeof(client_handshake);
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const status& data)
+    {
+        *packet << data.success;
+    }
+    uint8_t marshal::packet_size(const status& data)
+    {
+        (void)data;
+        return sizeof(status);
+    }
+    uint8_t marshal::sizeof_status()
+    {
+        return sizeof(status);
+    }
+    bool marshal::unpack(::kaminari::buffers::packet_reader* packet, login_data& data)
+    {
+        if (packet->bytes_read() + sizeof_uint8() > packet->buffer_size())
+        {
+            return false;
+        }
+        if (packet->bytes_read() + sizeof_uint8() + packet->peek<uint8_t>() > packet->buffer_size())
+        {
+            return false;
+        }
+        data.username = packet->read<std::string>();
+        if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
+        {
+            return false;
+        }
+        data.password0 = packet->read<uint64_t>();
+        if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
+        {
+            return false;
+        }
+        data.password1 = packet->read<uint64_t>();
+        if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
+        {
+            return false;
+        }
+        data.password2 = packet->read<uint64_t>();
+        if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
+        {
+            return false;
+        }
+        data.password3 = packet->read<uint64_t>();
+        return true;
+    }
+    uint8_t marshal::packet_size(const login_data& data)
+    {
+        uint8_t size = 0;
+        size += sizeof_uint8() + data.username.length();
+        size += sizeof_uint64();
+        size += sizeof_uint64();
+        size += sizeof_uint64();
+        size += sizeof_uint64();
+        return size;
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const status_ex& data)
+    {
+        *packet << data.code;
+    }
+    uint8_t marshal::packet_size(const status_ex& data)
+    {
+        (void)data;
+        return sizeof(status_ex);
+    }
+    uint8_t marshal::sizeof_status_ex()
+    {
+        return sizeof(status_ex);
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const characters_list_data& data)
+    {
+        *packet << data.num_characters;
+    }
+    uint8_t marshal::packet_size(const characters_list_data& data)
+    {
+        (void)data;
+        return sizeof(characters_list_data);
+    }
+    uint8_t marshal::sizeof_characters_list_data()
+    {
+        return sizeof(characters_list_data);
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const character& data)
+    {
+        *packet << data.name;
+        *packet << data.level;
+    }
+    uint8_t marshal::packet_size(const character& data)
+    {
+        uint8_t size = 0;
+        size += sizeof_uint8() + data.name.length();
+        size += sizeof_uint16();
+        return size;
+    }
+    bool marshal::unpack(::kaminari::buffers::packet_reader* packet, character_selection& data)
+    {
+        if (packet->bytes_read() + sizeof_uint8() > packet->buffer_size())
+        {
+            return false;
+        }
+        data.index = packet->read<uint8_t>();
+        return true;
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const success& data)
+    {
+    }
+    uint8_t marshal::packet_size(const success& data)
+    {
+        (void)data;
+        return sizeof(success);
+    }
+    uint8_t marshal::sizeof_success()
+    {
+        return sizeof(success);
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const complex& data)
+    {
+        *packet << static_cast<bool>(data.x);
+        if (static_cast<bool>(data.x))
+        {
+            *packet << *data.x;
+        }
+        *packet << static_cast<uint8_t>((data.y).size());
+        for (const spawn_data& val : data.y)
+        {
+            pack(packet, val);
+        }
+        *packet << data.z;
+        *packet << static_cast<bool>(data.w);
+        if (static_cast<bool>(data.w))
+        {
+            *packet << static_cast<uint8_t>((*data.w).size());
+            for (const bool& val : *data.w)
+            {
+                *packet << val;
+            }
+        }
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const spawn_data& data)
+    {
+        *packet << data.id;
+        *packet << data.x;
+        *packet << data.y;
     }
     uint8_t marshal::packet_size(const spawn_data& data)
     {
@@ -243,45 +275,7 @@ namespace kumo
         }
         return size;
     }
-    void marshal::pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const movement& data)
-    {
-        *packet << data.direction;
-    }
-    uint8_t marshal::packet_size(const movement& data)
-    {
-        (void)data;
-        return sizeof(movement);
-    }
-    uint8_t marshal::sizeof_movement()
-    {
-        return sizeof(movement);
-    }
-    bool marshal::unpack(::kaminari::packet_reader* packet, player_data& data)
-    {
-        if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.id = packet->read<uint64_t>();
-        if (packet->bytes_read() + sizeof_uint8() > packet->buffer_size())
-        {
-            return false;
-        }
-        if (packet->bytes_read() + sizeof_uint8() + packet->peek<uint8_t>() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.name = packet->read<std::string>();
-        return true;
-    }
-    uint8_t marshal::packet_size(const player_data& data)
-    {
-        uint8_t size = 0;
-        size += sizeof_uint64();
-        size += sizeof_uint8() + data.name.length();
-        return size;
-    }
-    bool marshal::unpack(::kaminari::packet_reader* packet, spawn& data)
+    bool marshal::unpack(::kaminari::buffers::packet_reader* packet, position& data)
     {
         if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
         {
@@ -299,6 +293,35 @@ namespace kumo
         }
         data.z = packet->read<float>();
         return true;
+    }
+    uint8_t marshal::packet_size(const position& data)
+    {
+        (void)data;
+        return sizeof(position);
+    }
+    uint8_t marshal::sizeof_position()
+    {
+        return sizeof(position);
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const character_spawn_data& data)
+    {
+        *packet << data.id;
+    }
+    uint8_t marshal::packet_size(const character_spawn_data& data)
+    {
+        (void)data;
+        return sizeof(character_spawn_data);
+    }
+    uint8_t marshal::sizeof_character_spawn_data()
+    {
+        return sizeof(character_spawn_data);
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const spawn& data)
+    {
+        *packet << data.id;
+        *packet << data.type;
+        *packet << data.x;
+        *packet << data.z;
     }
     uint8_t marshal::packet_size(const spawn& data)
     {
@@ -309,14 +332,9 @@ namespace kumo
     {
         return sizeof(spawn);
     }
-    bool marshal::unpack(::kaminari::packet_reader* packet, despawn& data)
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const despawn& data)
     {
-        if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.id = packet->read<uint64_t>();
-        return true;
+        *packet << data.id;
     }
     uint8_t marshal::packet_size(const despawn& data)
     {
@@ -327,29 +345,14 @@ namespace kumo
     {
         return sizeof(despawn);
     }
-    bool marshal::unpack(::kaminari::packet_reader* packet, entity_update& data)
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const entity_update& data)
     {
-        if (packet->bytes_read() + sizeof_uint64() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.id = packet->read<uint64_t>();
-        if (packet->bytes_read() + sizeof_float() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.x = packet->read<float>();
-        if (packet->bytes_read() + sizeof_float() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.z = packet->read<float>();
-        if (packet->bytes_read() + sizeof_float() > packet->buffer_size())
-        {
-            return false;
-        }
-        data.angle = packet->read<float>();
-        return true;
+        *packet << data.id;
+        *packet << data.x;
+        *packet << data.z;
+        *packet << data.speed;
+        *packet << data.vx;
+        *packet << data.vz;
     }
     uint8_t marshal::packet_size(const entity_update& data)
     {
@@ -360,7 +363,26 @@ namespace kumo
     {
         return sizeof(entity_update);
     }
-    void marshal::pack(const boost::intrusive_ptr<::kaminari::packet>& packet, const world_update_data& data)
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const self_update& data)
+    {
+        *packet << data.x;
+        *packet << data.z;
+        *packet << data.speed;
+        *packet << data.vx;
+        *packet << data.vz;
+        *packet << data.seq;
+        *packet << data.frame;
+    }
+    uint8_t marshal::packet_size(const self_update& data)
+    {
+        (void)data;
+        return sizeof(self_update);
+    }
+    uint8_t marshal::sizeof_self_update()
+    {
+        return sizeof(self_update);
+    }
+    void marshal::pack(const boost::intrusive_ptr<::kaminari::buffers::packet>& packet, const world_update_data& data)
     {
         *packet << static_cast<uint8_t>((data.data).size());
         for (const entity_update& val : data.data)
@@ -373,5 +395,65 @@ namespace kumo
         uint8_t size = 0;
         size += sizeof(uint8_t) + (data.data).size() * sizeof_entity_update();
         return size;
+    }
+     marshal::marshal():
+        _create_character(4),
+        _create_character_buffer_size(2),
+        _create_character_last_peeked(0),
+        _create_character_last_called(0),
+        _client_update(4),
+        _client_update_buffer_size(2),
+        _client_update_last_peeked(0),
+        _client_update_last_called(0),
+        _handshake(4),
+        _handshake_buffer_size(2),
+        _handshake_last_peeked(0),
+        _handshake_last_called(0),
+        _login(4),
+        _login_buffer_size(2),
+        _login_last_peeked(0),
+        _login_last_called(0),
+        _login_character(4),
+        _login_character_buffer_size(2),
+        _login_character_last_peeked(0),
+        _login_character_last_called(0),
+        _move(4),
+        _move_buffer_size(2),
+        _move_last_peeked(0),
+        _move_last_called(0)
+    {
+    }
+    void marshal::update(uint16_t block_id)
+    {
+        while (check_buffer(_create_character, block_id, _create_character_buffer_size))
+        {
+            on_create_character(client, _create_character.front().data, _create_character.front().timestamp);
+            create_character.pop_front();
+        }
+        while (check_buffer(_client_update, block_id, _client_update_buffer_size))
+        {
+            on_client_update(client, _client_update.front().data, _client_update.front().timestamp);
+            client_update.pop_front();
+        }
+        while (check_buffer(_handshake, block_id, _handshake_buffer_size))
+        {
+            on_handshake(client, _handshake.front().data, _handshake.front().timestamp);
+            handshake.pop_front();
+        }
+        while (check_buffer(_login, block_id, _login_buffer_size))
+        {
+            on_login(client, _login.front().data, _login.front().timestamp);
+            login.pop_front();
+        }
+        while (check_buffer(_login_character, block_id, _login_character_buffer_size))
+        {
+            on_login_character(client, _login_character.front().data, _login_character.front().timestamp);
+            login_character.pop_front();
+        }
+        while (check_buffer(_move, block_id, _move_buffer_size))
+        {
+            on_move(client, _move.front().data, _move.front().timestamp);
+            move.pop_front();
+        }
     }
 }

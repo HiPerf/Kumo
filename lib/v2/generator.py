@@ -278,5 +278,10 @@ class Generator(object):
                 self.generate_message_packer(message)
                 self.generate_message_size(message)
 
+        # Make sure everything is always sorted the same way
+        # We rely in python >= 3.7, which guarantes insertion order
+        self.opcodes = dict(sorted(self.opcodes.items(), key=lambda x: x[0]))
+
+        # Final touches
         self._generate_internals()
         self._generate_version(version)
