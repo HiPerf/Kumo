@@ -133,18 +133,20 @@ class Method(Block):
         self.postfix = postfix
 
     @check_eval_fn
-    def decl(self, level, modifiers=[], eval_fn=None):
+    def decl(self, level, modifiers=[], postfix='', eval_fn=None):
         modifiers = modifiers + self.decl_modifiers
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
         parameters = ', '.join(x.decl(0, eval_fn=eval_fn) for x in self.parameters)
+        postfix = self.postfix + (postfix if not self.interface else ';')
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
-        return template + indent(f'{modifiers}{self.dtype} {self.name}({parameters});\n', level)
+        return template + indent(f'{modifiers}{self.dtype} {self.name}({parameters}){postfix};\n', level)
 
     @check_eval_fn
     def instance(self, level, name_ns='', modifiers=[], postfix='', eval_fn=None):
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
         parameters = ', '.join(x.instance(0, eval_fn=eval_fn) for x in self.parameters)
         template = '' if self.template is None else self.template.decl(level, eval_fn=eval_fn)
+        postfix = self.postfix + (postfix if not self.interface else ';')
         fnc = template + indent(f'{modifiers}{self.dtype} {name_ns}{self.name}({parameters}){postfix}\n', level)
         return fnc + super().instance(level, eval_fn=eval_fn)
 
@@ -161,8 +163,8 @@ class Method(Block):
         return fnc + super().both(level, eval_fn=eval_fn)
 
 class Constructor(Method):
-    def __init__(self, dtype, name, parameters = None, decl_modifiers = None, visibility=Visibility.PRIVATE, template=None):
-        super().__init__(dtype, name, parameters, decl_modifiers, visibility, template)
+    def __init__(self, dtype, name, parameters = None, decl_modifiers = None, visibility=Visibility.PRIVATE, template=None, postfix=''):
+        super().__init__(dtype, name, parameters, decl_modifiers, visibility, template, postfix=postfix)
         self.initializers = []
 
     @check_eval_fn
@@ -190,23 +192,33 @@ class Attribute(object):
         self.default = default
         self.visibility = visibility
         self.decl_modifiers = decl_modifiers or []
+        self.ending = ';'
 
     @check_eval_fn
     def decl(self, level, modifiers=[], eval_fn=None):
         if self.default is not None:
             modifiers = '' if not (modifiers + self.decl_modifiers) else (' '.join(modifiers + self.decl_modifiers) + ' ')
-            return Statement(f'{modifiers}{self.dtype} {self.name} = {self.default}').decl(level, eval_fn=eval_fn)
+            return Statement(f'{modifiers}{self.dtype} {self.name} = {self.default}', ending=self.ending).decl(level, eval_fn=eval_fn)
 
         return self.instance(level, modifiers=modifiers + self.decl_modifiers, eval_fn=eval_fn) 
 
     @check_eval_fn
     def instance(self, level, modifiers=[], eval_fn=None):
         modifiers = '' if not modifiers else (' '.join(modifiers) + ' ')
-        return Statement(f'{modifiers}{self.dtype} {self.name}').instance(level, eval_fn=eval_fn)
+        return Statement(f'{modifiers}{self.dtype} {self.name}', ending=self.ending).instance(level, eval_fn=eval_fn)
     
     @check_eval_fn
     def both(self, level, modifiers=[], eval_fn=None):
         return self.decl(level, modifiers=modifiers, eval_fn=eval_fn)
+
+class Proppertie(Attribute):
+    def __init__(self, dtype, name, getter, setter):
+        getter = '' if not getter else 'get;'
+        setter = '' if not setter else 'set;'
+        name = f'{name} {{ {getter} {setter} }}'
+        super().__init__(dtype, name, visibility=Visibility.PUBLIC)
+
+        self.ending = ''
 
 class Class(object):
     def __init__(self, name, decl_modifiers=None, decl_name_base='', template=(None, None), cpp_style=False, csharp_style=False, keyword='class', postfix=''):

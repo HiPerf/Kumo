@@ -602,6 +602,16 @@ class LangGenerator(generator.Generator):
         self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_last_peeked'))
         self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_last_called'))
 
+        # Methods to get/set buffer size
+        set_method = gen.Method('void', f'{program_name}_buffer_size', [gen.Variable('uint8_t', 'buffer_size')], 
+            decl_modifiers=['inline'], visibility=gen.Visibility.PUBLIC)
+        self.marshal_cls.methods.append(set_method)
+        set_method.append(gen.Statement(f'_{program_name}_buffer_size = buffer_size'))
+        
+        get_method = gen.Method('uint8_t', f'{program_name}_buffer_size', decl_modifiers=['inline'], visibility=gen.Visibility.PUBLIC, postfix=' const')
+        self.marshal_cls.methods.append(get_method)
+        get_method.append(gen.Statement(f'return _{program_name}_buffer_size'))
+
         # Concepts
         self.marshal_file.add_first(gen.Concept([
             gen.Statement('template <typename M>', ending=''),
@@ -647,12 +657,16 @@ class LangGenerator(generator.Generator):
 
         # Generated constructor and update methods
         marshal_constructor = gen.Constructor('', 'marshal', visibility=gen.Visibility.PUBLIC)
+        marshal_move_constructor = gen.Constructor('', 'marshal', [gen.Variable('marshal&&', 'other')], visibility=gen.Visibility.PUBLIC, postfix=' noexcept')
+        marshal_move_op = gen.Method('marshal&', 'operator=', [gen.Variable('marshal&&', 'other')], visibility=gen.Visibility.PUBLIC, postfix=' noexcept')
         marshal_update = gen.Method('void', 'update', [
             gen.Variable('C*', 'client'),
             gen.Variable('uint16_t', 'block_id')
         ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PUBLIC)
 
         self.marshal_cls.methods.append(marshal_constructor)
+        self.marshal_cls.methods.append(marshal_move_constructor)
+        self.marshal_cls.methods.append(marshal_move_op)
         self.marshal_cls.methods.append(marshal_update)
 
         buffer_size = self.config.get("buffer_size", 2)
@@ -662,6 +676,18 @@ class LangGenerator(generator.Generator):
             marshal_constructor.initializers.append(gen.Statement(f'_{x}_buffer_size({buffer_size})', ending=''))
             marshal_constructor.initializers.append(gen.Statement(f'_{x}_last_peeked(0)', ending=''))
             marshal_constructor.initializers.append(gen.Statement(f'_{x}_last_called(0)', ending=''))
+
+            # Move constructor initializer
+            marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_buffer_size(other._{x}_buffer_size)', ending=''))
+            marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_last_peeked(other._{x}_last_peeked)', ending=''))
+            marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_last_called(other._{x}_last_called)', ending=''))
+            marshal_move_constructor.append(gen.Statement(f'_{x}.swap(other._{x})'))
+
+            # Operator=
+            marshal_move_op.append(gen.Statement(f'_{x}.swap(other._{x})'))
+            marshal_move_op.append(gen.Statement(f'_{x}_buffer_size = other._{x}_buffer_size'))
+            marshal_move_op.append(gen.Statement(f'_{x}_last_peeked = other._{x}_last_peeked'))
+            marshal_move_op.append(gen.Statement(f'_{x}_last_called = other._{x}_last_called'))
 
             # Update method
             marshal_update.append(gen.Statement(f'while (check_buffer(_{x}, block_id, _{x}_buffer_size))', ending=''))

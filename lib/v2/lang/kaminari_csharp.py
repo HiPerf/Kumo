@@ -734,7 +734,7 @@ class LangGenerator(generator.Generator):
         self.marshal_cls.methods.append(method)
 
         self.marshal_cls.attributes.append(gen.Attribute(f'SortedList<ushort, DataBuffer<{to_camel_case(message_name)}>>', f'{to_camel_case(program_name, capitalize=False)}'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'byte', f'{to_camel_case(program_name, capitalize=False)}BufferSize'))
+        self.marshal_cls.attributes.append(gen.Proppertie(f'byte', f'{to_camel_case(program_name, capitalize=False)}BufferSize', True, True))
         self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastPeeked'))
         self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastCalled'))
 
