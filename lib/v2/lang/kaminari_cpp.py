@@ -698,6 +698,9 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'_{x}.pop_front()')
             ]))
         
+        # Finish operator=
+        marshal_move_op.append(gen.Statement(f'return *this'))
+
         # Opcodes enum
         opcodes = gen.Scope([
             gen.Statement('enum class opcode', ending=''),
