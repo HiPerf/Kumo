@@ -112,7 +112,7 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PROTECTED, postfix=' where T : new()')
         self.marshal_cls.methods.append(method)
 
-        method.append(gen.Statement('return buffer.Count > 0 && Kaminari.Overflow.le(buffer[0].BlockId, Kaminari.Overflow.sub(blockId, (ushort)bufferSize))'))
+        method.append(gen.Statement('return buffer.Count > 0 && Kaminari.Overflow.le(buffer.Values[0].BlockId, Kaminari.Overflow.sub(blockId, (ushort)bufferSize))'))
 
         # Flush IClient 
         self.client_itf = gen.Class('IClient : Kaminari.IBaseClient', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], keyword='interface')
@@ -708,7 +708,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'return {false_case}(client, packet.getOpcode())')
             ]))
         
-        method.append(gen.Statement(f'if (Kaminari.Overflow.leq(blockId, {to_camel_case(program_name, capitalize=False)}LastCalled))', ending=''))
+        method.append(gen.Statement(f'if (Kaminari.Overflow.le(blockId, {to_camel_case(program_name, capitalize=False)}LastCalled))', ending=''))
         method.append(gen.Block([
             gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
             gen.Statement('return true')
@@ -814,7 +814,7 @@ class LangGenerator(generator.Generator):
             # Update method
             marshal_update.append(gen.Statement(f'while (checkBuffer({x}, blockId, {x}BufferSize))', ending=''))
             marshal_update.append(gen.Block([
-                gen.Statement(f'var data = {x}[0]'),
+                gen.Statement(f'var data = {x}.Values[0]'),
                 gen.Statement(f'((IClient)client).on{to_camel_case(program_name)}(data.Data, data.Timestamp)'),
                 gen.Statement(f'{x}LastCalled = data.BlockId'),
                 gen.Statement(f'{x}.RemoveAt(0)')

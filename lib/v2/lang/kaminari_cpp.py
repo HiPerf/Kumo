@@ -571,7 +571,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()))')
             ]))
         
-        method.append(gen.Statement(f'if (cx::overflow::leq(block_id, _{program_name}_last_called))', ending=''))
+        method.append(gen.Statement(f'if (cx::overflow::le(block_id, _{program_name}_last_called))', ending=''))
         method.append(gen.Block([
             gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
             gen.Statement('return true')
