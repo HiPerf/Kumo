@@ -617,7 +617,7 @@ class LangGenerator(generator.Generator):
             gen.Statement('template <typename M>', ending=''),
             gen.Statement(f'concept has_peek_{program_name} = requires(M m, {message_name} d)', ending=''),
             gen.Block([
-                gen.Statement(f'{{ m.peek_{program_name}(nullptr, nullptr, d) }} ')
+                gen.Statement(f'{{ m.peek_{program_name}(nullptr, d, 0) }} ')
             ], ending=';')
         ]))
         
