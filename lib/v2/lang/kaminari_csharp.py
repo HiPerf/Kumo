@@ -95,14 +95,14 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PROTECTED, postfix=' where T : new')
         self.marshal_cls.methods.append(method)
 
-        method.append(gen.Statement('var data = new DataBuffer<T>', ending=''))
+        method.append(gen.Statement('var buffer = new DataBuffer<T>', ending=''))
         method.append(gen.Block([
             gen.Statement('BlockId = blockId'),
             gen.Statement('Timestamp = timestamp'),
             gen.Statement('Data = new T()')
         ], ending=';'))
-        method.append(gen.Statement('buffer.Add(blockId, data)'))
-        method.append(gen.Statement('return data'))
+        method.append(gen.Statement('buffer.Add(blockId, buffer)'))
+        method.append(gen.Statement('return buffer.Data'))
 
         # Helper method for marhsal
         method = gen.Method('bool', f'checkBuffer<T>', [
@@ -112,7 +112,7 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PROTECTED, postfix=' where T : new')
         self.marshal_cls.methods.append(method)
 
-        method.append(gen.Statement('return buffer.Count > 0 && Overflow.le(buffer[0].block_id, Overflow.sub(blockId, (ushort)bufferSize))'))
+        method.append(gen.Statement('return buffer.Count > 0 && Overflow.le(buffer[0].BlockId, Overflow.sub(blockId, (ushort)bufferSize))'))
 
         # Flush IClient 
         self.client_itf = gen.Class('IClient : Kaminari.IBaseClient', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], keyword='interface')
@@ -807,8 +807,8 @@ class LangGenerator(generator.Generator):
             # Update method
             marshal_update.append(gen.Statement(f'while (checkBuffer({x}, blockId, {x}BufferSize))', ending=''))
             marshal_update.append(gen.Block([
-                gen.Statement(f'client.on{x}(client, {x}[0].data, {x}.front().timestamp)'),
-                gen.Statement(f'{x}LastCalled = data.blockId'),
+                gen.Statement(f'client.on{x}(client, {x}[0].Data, {x}.front().Timestamp)'),
+                gen.Statement(f'{x}LastCalled = data.BlockId'),
                 gen.Statement(f'{x}.RemoveAt(0)')
             ]))
         
