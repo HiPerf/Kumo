@@ -1,5 +1,8 @@
-public class Config
+namespace Kumo
 {
-    public static uint VERSION = 0x29cab0aa;
-}
+    public class Config
+    {
+        public static uint VERSION = 0xf510e1aa;
+    }
 
+}

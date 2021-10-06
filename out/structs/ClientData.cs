@@ -2,11 +2,13 @@ using System.Collections;
 using System.Collections.Generic;
 namespace Kumo
 {
-    public class Status : Kaminari.IData
+    public class ClientData : Kaminari.IData
     {
         public void pack(Kaminari.IMarshal marshal, Kaminari.Packet packet)
         {
-            packet.getData().write((bool)this.success);
+            packet.getData().write((char)this.x);
+            packet.getData().write((char)this.y);
+            packet.getData().write((byte)this.seq);
         }
         public bool unpack(Kaminari.IMarshal marshal, Kaminari.PacketReader packet)
         {
@@ -14,16 +16,22 @@ namespace Kumo
             {
                 return false;
             }
-            this.success = packet.getData().readBool();
+            this.x = packet.getData().readChar();
+            this.y = packet.getData().readChar();
+            this.seq = packet.getData().readByte();
             return true;
         }
         public int size(Kaminari.IMarshal marshal)
         {
             int size = 0;
-            size += marshal.size<bool>();
+            size += marshal.size<char>();
+            size += marshal.size<char>();
+            size += marshal.size<byte>();
             return size;
         }
-        public bool success;
+        public char x;
+        public char y;
+        public byte seq;
     }
 
 }

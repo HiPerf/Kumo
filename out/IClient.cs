@@ -1,8 +1,13 @@
-public interface IClient : IBaseClient
+namespace Kumo
 {
-    bool onLoginResponse(Status data, ulong timestamp);
-    bool onHandshakeResponse(Status data, ulong timestamp);
-    bool onDoSth(Complex data, ulong timestamp);
-    bool onSpawn(SpawnData data, ulong timestamp);
-}
+    public interface IClient : Kaminari.IBaseClient
+    {
+        bool onMove(Position data, ulong timestamp);
+        bool onHandshake(ClientHandshake data, ulong timestamp);
+        bool onLoginCharacter(CharacterSelection data, ulong timestamp);
+        bool onLogin(LoginData data, ulong timestamp);
+        bool onCreateCharacter(CreationData data, ulong timestamp);
+        bool onClientUpdate(ClientData data, ulong timestamp);
+    }
 
+}

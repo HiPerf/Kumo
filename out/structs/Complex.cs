@@ -1,110 +1,107 @@
-package lostsouls.net.lostsocket.lostsouls.net.kumo.structs;
-import java.util.ArrayList;
-import java.util.TreeMap;
-import net.kaminari.Packet;
-import net.kaminari.PacketReader;
-import net.kaminari.Optional;
-import net.kaminari.IMarshal;
-import net.kaminari.packers.IData;
-import net.kaminari.packers.IHasId;
-import net.kaminari.packers.IHasDataVector;
-public class Complex implements IData
+using System.Collections;
+using System.Collections.Generic;
+namespace Kumo
 {
-    public void pack(IMarshal marshal, Packet packet)
+    public class Complex : Kaminari.IData
     {
-        packet.getData().write(this.x.hasValue());
-        if (this.x.hasValue())
+        public void pack(Kaminari.IMarshal marshal, Kaminari.Packet packet)
         {
-            packet.getData().write((uint)this.x.getValue());
-        }
-        packet.getData().write((byte)this.y.size());
-        for (SpawnData val : this.y)
-        {
-            val.pack(marshal, packet);
-        }
-        packet.getData().write((int)this.z);
-        packet.getData().write(this.w.hasValue());
-        if (this.w.hasValue())
-        {
-            packet.getData().write((byte)this.w.getValue().size());
-            for (bool val : this.w.getValue())
+            packet.getData().write(this.x.hasValue());
+            if (this.x.hasValue())
             {
-                packet.getData().write((bool)val);
+                packet.getData().write((uint)this.x.getValue());
+            }
+            packet.getData().write((byte)this.y.Count);
+            foreach (SpawnData val in this.y)
+            {
+                val.pack(marshal, packet);
+            }
+            packet.getData().write((int)this.z);
+            packet.getData().write(this.w.hasValue());
+            if (this.w.hasValue())
+            {
+                packet.getData().write((byte)this.w.getValue().Count);
+                foreach (bool val in this.w.getValue())
+                {
+                    packet.getData().write((bool)val);
+                }
             }
         }
-    }
-    public bool unpack(IMarshal marshal, PacketReader packet)
-    {
-        if (packet.bytesRead() + Byte.BYTES > packet.bufferSize())
+        public bool unpack(Kaminari.IMarshal marshal, Kaminari.PacketReader packet)
         {
-            return false;
-        }
-        if (packet.getData().readByte() == 1)
-        {
-            if (packet.bytesRead() + marshal.size(uint.class) > packet.bufferSize())
+            if (packet.bytesRead() + sizeof(byte) > packet.bufferSize())
             {
                 return false;
             }
-            this.x.setValue(packet.getData().readuint());
-        }
-        int size_y = Byte.toUnsignedInt(packet.getData().readByte());
-        this.y = new List<SpawnData>();
-        for (int i = 0; i < size_y; ++i)
-        {
-            SpawnData data = new SpawnData();
-            if (data.unpack(marshal, packet))
+            this.x = new Kaminari.Optional<uint>();
+            if (packet.getData().readByte() == 1)
             {
-                this.y.add(data);
+                if (packet.bytesRead() + marshal.size<uint>() > packet.bufferSize())
+                {
+                    return false;
+                }
+                this.x.setValue(packet.getData().readUint());
             }
-            else
+            int size_y = packet.getData().readByte();
+            this.y = new List<SpawnData>();
+            for (int i = 0; i < size_y; ++i)
             {
-                return false;
+                SpawnData data = new SpawnData();
+                if (data.unpack(marshal, packet))
+                {
+                    this.y.Add(data);
+                }
+                else
+                {
+                    return false;
+                }
             }
-        }
-        if (packet.bytesRead() + marshal.size(int.class) > packet.bufferSize())
-        {
-            return false;
-        }
-        this.z = packet.getData().readint();
-        if (packet.bytesRead() + Byte.BYTES > packet.bufferSize())
-        {
-            return false;
-        }
-        if (packet.getData().readByte() == 1)
-        {
-            int size_w = Byte.toUnsignedInt(packet.getData().readByte());
-            if (packet.bytesRead() + size_w * marshal.size(bool.class) > packet.bufferSize())
+            if (packet.bytesRead() + marshal.size<int>() > packet.bufferSize())
             {
                 return false;
             }
-            this.w.setValue(new List<bool>());
-            for (int i = 0; i < size_w; ++i)
+            this.z = packet.getData().readInt();
+            if (packet.bytesRead() + sizeof(byte) > packet.bufferSize())
             {
-                this.w.getValue().add(packet.getData().readbool());
+                return false;
             }
+            this.w = new Kaminari.Optional<List<bool>>();
+            if (packet.getData().readByte() == 1)
+            {
+                int size_w = packet.getData().readByte();
+                if (packet.bytesRead() + size_w * marshal.size<bool>() > packet.bufferSize())
+                {
+                    return false;
+                }
+                this.w.setValue(new List<bool>());
+                for (int i = 0; i < size_w; ++i)
+                {
+                    this.w.getValue().Add(packet.getData().readBool());
+                }
+            }
+            return true;
         }
-        return true;
-    }
-    public int size(IMarshal marshal)
-    {
-        int size = 0;
-        size += Byte.BYTES;
-        if (this.x.hasValue())
+        public int size(Kaminari.IMarshal marshal)
         {
-            size += marshal.size(uint.class);
+            int size = 0;
+            size += sizeof(byte);
+            if (this.x.hasValue())
+            {
+                size += marshal.size<uint>();
+            }
+            size += sizeof(byte) + this.y.Count * marshal.size<SpawnData>();
+            size += marshal.size<int>();
+            size += sizeof(byte);
+            if (this.w.hasValue())
+            {
+                size += sizeof(byte) + this.w.getValue().Count * marshal.size<bool>();
+            }
+            return size;
         }
-        size += Byte.BYTES + this.y.size() * marshal.size(SpawnData.class);
-        size += marshal.size(int.class);
-        size += Byte.BYTES;
-        if (this.w.hasValue())
-        {
-            size += Byte.BYTES + this.w.getValue().size() * marshal.size(bool.class);
-        }
-        return size;
+        public Kaminari.Optional<uint> x;
+        public List<SpawnData> y;
+        public int z;
+        public Kaminari.Optional<List<bool>> w;
     }
-    public Optional<uint> x;
-    public ArrayList<SpawnData> y;
-    public int z;
-    public Optional<ArrayList<bool>> w;
-}
 
+}

@@ -1,70 +1,65 @@
-package lostsouls.net.lostsocket.lostsouls.net.kumo.structs;
-import java.util.ArrayList;
-import java.util.TreeMap;
-import net.kaminari.Packet;
-import net.kaminari.PacketReader;
-import net.kaminari.Optional;
-import net.kaminari.IMarshal;
-import net.kaminari.packers.IData;
-import net.kaminari.packers.IHasId;
-import net.kaminari.packers.IHasDataVector;
-public class LoginData implements IData
+using System.Collections;
+using System.Collections.Generic;
+namespace Kumo
 {
-    public void pack(IMarshal marshal, Packet packet)
+    public class LoginData : Kaminari.IData
     {
-        packet.getData().write((string)this.username);
-        packet.getData().write((ulong)this.password0);
-        packet.getData().write((ulong)this.password1);
-        packet.getData().write((ulong)this.password2);
-        packet.getData().write((ulong)this.password3);
+        public void pack(Kaminari.IMarshal marshal, Kaminari.Packet packet)
+        {
+            packet.getData().write((string)this.username);
+            packet.getData().write((ulong)this.password0);
+            packet.getData().write((ulong)this.password1);
+            packet.getData().write((ulong)this.password2);
+            packet.getData().write((ulong)this.password3);
+        }
+        public bool unpack(Kaminari.IMarshal marshal, Kaminari.PacketReader packet)
+        {
+            if (packet.bytesRead() + marshal.size<byte>() > packet.bufferSize())
+            {
+                return false;
+            }
+            if (packet.bytesRead() + marshal.size<byte>() + packet.getData().peekByte() > packet.bufferSize())
+            {
+                return false;
+            }
+            this.username = packet.getData().readString();
+            if (packet.bytesRead() + marshal.size<ulong>() > packet.bufferSize())
+            {
+                return false;
+            }
+            this.password0 = packet.getData().readUlong();
+            if (packet.bytesRead() + marshal.size<ulong>() > packet.bufferSize())
+            {
+                return false;
+            }
+            this.password1 = packet.getData().readUlong();
+            if (packet.bytesRead() + marshal.size<ulong>() > packet.bufferSize())
+            {
+                return false;
+            }
+            this.password2 = packet.getData().readUlong();
+            if (packet.bytesRead() + marshal.size<ulong>() > packet.bufferSize())
+            {
+                return false;
+            }
+            this.password3 = packet.getData().readUlong();
+            return true;
+        }
+        public int size(Kaminari.IMarshal marshal)
+        {
+            int size = 0;
+            size += marshal.size<byte>() + this.username.Length;
+            size += marshal.size<ulong>();
+            size += marshal.size<ulong>();
+            size += marshal.size<ulong>();
+            size += marshal.size<ulong>();
+            return size;
+        }
+        public string username;
+        public ulong password0;
+        public ulong password1;
+        public ulong password2;
+        public ulong password3;
     }
-    public bool unpack(IMarshal marshal, PacketReader packet)
-    {
-        if (packet.bytesRead() + marshal.size(Byte.class) > packet.bufferSize())
-        {
-            return false;
-        }
-        if (packet.bytesRead() + marshal.size(Byte.class) + packet.getData().peekByte() > packet.bufferSize())
-        {
-            return false;
-        }
-        this.username = packet.getData().readstring();
-        if (packet.bytesRead() + marshal.size(ulong.class) > packet.bufferSize())
-        {
-            return false;
-        }
-        this.password0 = packet.getData().readulong();
-        if (packet.bytesRead() + marshal.size(ulong.class) > packet.bufferSize())
-        {
-            return false;
-        }
-        this.password1 = packet.getData().readulong();
-        if (packet.bytesRead() + marshal.size(ulong.class) > packet.bufferSize())
-        {
-            return false;
-        }
-        this.password2 = packet.getData().readulong();
-        if (packet.bytesRead() + marshal.size(ulong.class) > packet.bufferSize())
-        {
-            return false;
-        }
-        this.password3 = packet.getData().readulong();
-        return true;
-    }
-    public int size(IMarshal marshal)
-    {
-        int size = 0;
-        size += marshal.size(Byte.class) + this.username.length();
-        size += marshal.size(ulong.class);
-        size += marshal.size(ulong.class);
-        size += marshal.size(ulong.class);
-        size += marshal.size(ulong.class);
-        return size;
-    }
-    public string username;
-    public ulong password0;
-    public ulong password1;
-    public ulong password2;
-    public ulong password3;
-}
 
+}

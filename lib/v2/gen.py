@@ -209,9 +209,10 @@ class Attribute(object):
         return self.decl(level, modifiers=modifiers, eval_fn=eval_fn)
 
 class Class(object):
-    def __init__(self, name, decl_modifiers=None, decl_name_base='', template=(None, None), cpp_style=False, csharp_style=False, keyword='class'):
+    def __init__(self, name, decl_modifiers=None, decl_name_base='', template=(None, None), cpp_style=False, csharp_style=False, keyword='class', postfix=''):
         self.keyword = keyword
         self.name = name
+        self.postfix = postfix
         self.decl_modifiers = decl_modifiers or []
         self.decl_name_base = decl_name_base
         self.cpp_style = cpp_style
@@ -293,7 +294,7 @@ class Class(object):
         template_preface, _ = self._get_template_args(level)
         modifiers = '' if not self.decl_modifiers else (' '.join(self.decl_modifiers) + ' ')
         ending = '' if not self.cpp_style else ';'
-        cls = indent(f'{modifiers}{self.keyword} {self.name}{self.decl_name_base}\n', level)
+        cls = indent(f'{modifiers}{self.keyword} {self.name}{self.decl_name_base}{self.postfix}\n', level)
         preface = indent('{\n', level)
         postface = indent('}' + ending + '\n', level)
 

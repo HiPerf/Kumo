@@ -81,6 +81,39 @@ class LangGenerator(generator.Generator):
         )
         self.marshal_file.add(self.marshal_cls)
 
+        data_struct = gen.Class('DataBuffer<T>', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], postfix=' where T : new')
+        data_struct.attributes.append(gen.Attribute('T', 'Data', visibility=gen.Visibility.PUBLIC))
+        data_struct.attributes.append(gen.Attribute('ushort', 'BlockId', visibility=gen.Visibility.PUBLIC))
+        data_struct.attributes.append(gen.Attribute('ulong', 'Timestamp', visibility=gen.Visibility.PUBLIC))
+        self.marshal_file.add(data_struct)
+
+        # Helper method for marhsal
+        method = gen.Method('T', f'emplaceData<T>', [
+            gen.Variable('SortedList<ushort, DataBuffer<T>>', 'buffer'),
+            gen.Variable('ushort', 'blockId'),
+            gen.Variable('ulong', 'timestamp')
+        ], visibility=gen.Visibility.PROTECTED, postfix=' where T : new')
+        self.marshal_cls.methods.append(method)
+
+        method.append(gen.Statement('var data = new DataBuffer<T>', ending=''))
+        method.append(gen.Block([
+            gen.Statement('BlockId = blockId'),
+            gen.Statement('Timestamp = timestamp'),
+            gen.Statement('Data = new T()')
+        ], ending=';'))
+        method.append(gen.Statement('buffer.Add(blockId, data)'))
+        method.append(gen.Statement('return data'))
+
+        # Helper method for marhsal
+        method = gen.Method('bool', f'checkBuffer<T>', [
+            gen.Variable('SortedList<ushort, DataBuffer<T>>', 'buffer'),
+            gen.Variable('ushort', 'blockId'),
+            gen.Variable('byte', 'bufferSize')
+        ], visibility=gen.Visibility.PROTECTED, postfix=' where T : new')
+        self.marshal_cls.methods.append(method)
+
+        method.append(gen.Statement('return buffer.Count > 0 && Overflow.le(buffer[0].block_id, Overflow.sub(blockId, (ushort)bufferSize))'))
+
         # Flush IClient 
         self.client_itf = gen.Class('IClient : Kaminari.IBaseClient', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], keyword='interface')
         self.client_file.add(self.client_itf)
@@ -651,13 +684,13 @@ class LangGenerator(generator.Generator):
     def _generate_program_recv(self, program: boxes.ProgramBox):
         # Helpers
         program_name = program.name.eval()
-        args = program.args.eval()
-        message_name = args[0]
+        message_name = self.get_program_message(program)
 
         method = gen.Method('bool', f'handle{to_camel_case(program_name)}', [
             gen.Variable('Kaminari.IMarshal', 'marshal'),
             gen.Variable('Kaminari.PacketReader', 'packet'),
-            gen.Variable('IClient', 'client')
+            gen.Variable('IClient', 'client'),
+            gen.Variable('ushort', 'blockId')
         ], visibility=gen.Visibility.PRIVATE)
 
         if program.cond.attr is not None:
@@ -674,23 +707,30 @@ class LangGenerator(generator.Generator):
             method.append(gen.Block([
                 gen.Statement(f'return {false_case}(client, packet.getOpcode())')
             ]))
-
-        # Templated queues work by filling vectors
-        queue = self.queues[program.queue.eval()]
-        if queue.specifier.queue_type == boxes.QueueSpecifierType.TEMPLATED:
-            args = queue.specifier.args
-            message_name = args[1].eval()
         
-        method.append(gen.Statement(f'{to_camel_case(message_name)} data = new {to_camel_case(message_name)}()'))
+        method.append(gen.Statement(f'if (Overflow.leq(blockId, {to_camel_case(program_name, capitalize=False)}LastCalled))', ending=''))
+        method.append(gen.Block([
+            gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
+            gen.Statement('return true')
+        ]))
+
+        method.append(gen.Statement(f'var data = emplaceData({to_camel_case(program_name, capitalize=False)}, blockId, packet.timestamp())'))
         method.append(gen.Statement(f'if (!data.unpack(marshal, packet))', ending=''))
         method.append(gen.Block([
             gen.Statement('return false')
         ]))
 
-        method.append(gen.Statement(f'return client.on{to_camel_case(program_name)}(data, packet.timestamp())'))
+        method.append(gen.Statement('// The user is assumed to provide all peek methods in C#', ending=''))
+        method.append(gen.Statement('// TODO: Test if the method exists in the class', ending=''))
+        method.append(gen.Statement(f'return client.peek{to_camel_case(program_name)}(data, packet.timestamp())'))
 
         self.handler_programs.add(program_name)
         self.marshal_cls.methods.append(method)
+
+        self.marshal_cls.attributes.append(gen.Attribute(f'SortedList<DataBuffer<{to_camel_case(program_name)}>>', f'{to_camel_case(program_name, capitalize=False)}'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'byte', f'{to_camel_case(program_name, capitalize=False)}BufferSize'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastPeeked'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastCalled'))
 
         return [method]
 
@@ -724,7 +764,8 @@ class LangGenerator(generator.Generator):
         # General packet handler
         method = gen.Method('bool', 'handlePacket<T>', [
             gen.Variable('Kaminari.PacketReader', 'packet'),
-            gen.Variable('T', 'client')
+            gen.Variable('T', 'client'),
+            gen.Variable('ushort', 'blockId')
         ], visibility=gen.Visibility.PUBLIC, postfix=' where T : Kaminari.IBaseClient')
 
         method.append(gen.Statement('switch (packet.getOpcode())', ending=''))
@@ -732,7 +773,7 @@ class LangGenerator(generator.Generator):
             gen.Scope([
                 gen.Statement(f'case (ushort)Opcodes.opcode{to_camel_case(program)}:', ending=''),
                 gen.Scope([
-                    gen.Statement(f'return handle{to_camel_case(program)}(this, packet, (IClient)client)') 
+                    gen.Statement(f'return handle{to_camel_case(program)}(this, packet, (IClient)client, blockId)') 
                 ], indent=True)
             ]) for program in self.handler_programs
         ] + [gen.Scope([
@@ -744,6 +785,33 @@ class LangGenerator(generator.Generator):
 
         self.marshal_cls.methods.append(method)
 
+        # Generated constructor and update methods
+        marshal_constructor = gen.Method('', 'Marshal', visibility=gen.Visibility.PUBLIC)
+        marshal_update = gen.Method('void', 'Update', [
+            gen.Variable('IClient', 'client'),
+            gen.Variable('ushort', 'blockId')
+        ], visibility=gen.Visibility.PUBLIC)
+
+        self.marshal_cls.methods.append(marshal_constructor)
+        self.marshal_cls.methods.append(marshal_update)
+
+        buffer_size = self.config.get("buffer_size", 2)
+        for x in self.recv_list:
+            # Constructor initializer
+            x = to_camel_case(x, capitalize=False)
+            marshal_constructor.append(gen.Statement(f'{x} = new SortedList<ushort, DataBuffer<{to_camel_case(x)}>>()'))
+            marshal_constructor.append(gen.Statement(f'{x}BufferSize = {buffer_size}'))
+            marshal_constructor.append(gen.Statement(f'{x}LastPeeked = 0'))
+            marshal_constructor.append(gen.Statement(f'{x}LastCalled = 0'))
+
+            # Update method
+            marshal_update.append(gen.Statement(f'while (checkBuffer({x}, blockId, {x}BufferSize))', ending=''))
+            marshal_update.append(gen.Block([
+                gen.Statement(f'client.on{x}(client, {x}[0].data, {x}.front().timestamp)'),
+                gen.Statement(f'{x}LastCalled = data.blockId'),
+                gen.Statement(f'{x}.RemoveAt(0)')
+            ]))
+        
         # IClient
         for program_name in self.handler_programs:
             program = self.programs[program_name]

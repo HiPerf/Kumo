@@ -1,34 +1,29 @@
-package lostsouls.net.lostsocket.lostsouls.net.kumo.structs;
-import java.util.ArrayList;
-import java.util.TreeMap;
-import net.kaminari.Packet;
-import net.kaminari.PacketReader;
-import net.kaminari.Optional;
-import net.kaminari.IMarshal;
-import net.kaminari.packers.IData;
-import net.kaminari.packers.IHasId;
-import net.kaminari.packers.IHasDataVector;
-public class HasId implements IData
+using System.Collections;
+using System.Collections.Generic;
+namespace Kumo
 {
-    public void pack(IMarshal marshal, Packet packet)
+    public class HasId : Kaminari.IData
     {
-        packet.getData().write((long)this.id);
-    }
-    public bool unpack(IMarshal marshal, PacketReader packet)
-    {
-        if (packet.bytesRead() + this.size(marshal) > packet.bufferSize())
+        public void pack(Kaminari.IMarshal marshal, Kaminari.Packet packet)
         {
-            return false;
+            packet.getData().write((ulong)this.id);
         }
-        this.id = packet.getData().readlong();
-        return true;
+        public bool unpack(Kaminari.IMarshal marshal, Kaminari.PacketReader packet)
+        {
+            if (packet.bytesRead() + this.size(marshal) > packet.bufferSize())
+            {
+                return false;
+            }
+            this.id = packet.getData().readUlong();
+            return true;
+        }
+        public int size(Kaminari.IMarshal marshal)
+        {
+            int size = 0;
+            size += marshal.size<ulong>();
+            return size;
+        }
+        public ulong id;
     }
-    public int size(IMarshal marshal)
-    {
-        int size = 0;
-        size += marshal.size(long.class);
-        return size;
-    }
-    public long id;
-}
 
+}
