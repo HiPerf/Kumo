@@ -830,6 +830,7 @@ class LangGenerator(generator.Generator):
         with open(f'{path}/marshal.hpp', 'w') as fp:
             fp.write(self.marshal_file.header([
                 gen.Statement(f'#pragma once', ending=''),
+                gen.Statement(f'#include <concepts>', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
