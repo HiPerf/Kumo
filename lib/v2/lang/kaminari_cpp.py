@@ -194,7 +194,7 @@ class LangGenerator(generator.Generator):
                         gen.Block([
                             gen.Statement(f'({variable}).push_back(std::move(data_{inner}))')
                         ]),
-                        gen.Statement(f'else'),
+                        gen.Statement(f'else', ending=''),
                         gen.Block([
                             gen.Statement('return false')
                         ])
