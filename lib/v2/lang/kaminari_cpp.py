@@ -92,6 +92,10 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PROTECTED, template=gen.Statement('template <typename T>', ending=''), decl_modifiers=['inline'])
         self.marshal_cls.methods.append(method)
         
+        method.append(gen.Statement('if (buffer.size() == buffer.capacity())', ending=''))
+        method.append(gen.Block([
+            gen.Statement('buffer.set_capacity(buffer.capacity() * 2)')
+        ]))
         method.append(gen.Statement('auto it = buffer.begin()'))
         method.append(gen.Statement('while(it != buffer.end())', ending=''))
         method.append(gen.Block([
