@@ -189,10 +189,10 @@ class LangGenerator(generator.Generator):
                     gen.Statement(f'uint8_t size = packet->read<uint8_t>()'),
                     gen.Statement(f'for (int i = 0; i < size; ++i)', ending=''),
                     gen.Block([
-                        gen.Statement(f'{inner} data'),
-                        gen.Statement(f'if (unpack(packet, data)', ending=''),
+                        gen.Statement(f'{inner} data_{inner}'),
+                        gen.Statement(f'if (unpack(packet, data_{inner}))', ending=''),
                         gen.Block([
-                            gen.Statement(f'({variable}).push_back(std::move(data))')
+                            gen.Statement(f'({variable}).push_back(std::move(data_{inner}))')
                         ]),
                         gen.Statement(f'else'),
                         gen.Block([
@@ -833,9 +833,12 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <concepts>', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
+                gen.Statement(f'#include <boost/circular_buffer.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/client/basic_client.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/cx/overflow.hpp>', ending=''),
                 *marshal_include
             ]))
