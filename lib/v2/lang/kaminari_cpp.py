@@ -713,7 +713,7 @@ class LangGenerator(generator.Generator):
 
             # Reset
             marshal_reset.append(gen.Statement(f'_{x}.clear()'))
-            marshal_reset.append(gen.Statement(f'_{x}_buffer_size = {buffer_size * 2}'))
+            marshal_reset.append(gen.Statement(f'_{x}_buffer_size = {buffer_size}'))
             marshal_reset.append(gen.Statement(f'_{x}_last_peeked = 0'))
             marshal_reset.append(gen.Statement(f'_{x}_last_called = 0'))
 
