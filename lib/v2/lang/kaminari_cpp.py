@@ -93,9 +93,9 @@ class LangGenerator(generator.Generator):
         self.marshal_cls.methods.append(method)
         
         method.append(gen.Statement('auto it = buffer.begin()'))
-        method.append(gen.Statement('while(it != buffer.end())', ending=''))
+        method.append(gen.Statement('while (it != buffer.end())', ending=''))
         method.append(gen.Block([
-            gen.Statement('if (it->block_id > block_id)', ending=''),
+            gen.Statement('if (cx::overflow::ge(it->block_id, block_id))', ending=''),
             gen.Block([
                 gen.Statement('break')
             ]),
@@ -556,6 +556,10 @@ class LangGenerator(generator.Generator):
             gen.Variable('uint16_t', 'block_id'),
         ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PRIVATE)
 
+        method.append(gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''))
+        method.append(gen.Statement(f'spdlog::debug("Received packet `{program_name}({message_name})@{{}}` with _last_peeked={{}} (enabled={{}}) and _last_called={{}}", block_id, _{program_name}_last_peeked, has_peek_{program_name}<marshal>, _{program_name}_last_called)'))
+        method.append(gen.Statement('#endif', ending=''))
+
         if program.cond.attr is not None:
             attr = program.cond.attr.eval()
             value = program.cond.value.eval()
@@ -568,18 +572,27 @@ class LangGenerator(generator.Generator):
             #method.append(gen.Statement(f'if (client->{attr}() != {attr}::{value})', ending=''))
             method.append(gen.Statement(f'if (!check_client_{attr}(client, {value}))', ending=''))
             method.append(gen.Block([
+                gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
+                gen.Statement(f'spdlog::debug(" > Failed check")'),
+                gen.Statement('#endif', ending=''),
                 gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()))')
             ]))
         
         method.append(gen.Statement(f'if (cx::overflow::le(block_id, _{program_name}_last_called))', ending=''))
         method.append(gen.Block([
             gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
+            gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
+            gen.Statement(f'spdlog::debug(" > Out of order")'),
+            gen.Statement('#endif', ending=''),
             gen.Statement('return true')
         ]))
 
         method.append(gen.Statement(f'auto& data = emplace_data(_{program_name}, block_id, packet->timestamp())'))
         method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
         method.append(gen.Block([
+            gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
+            gen.Statement(f'spdlog::debug(" > Failed to unpack")'),
+            gen.Statement('#endif', ending=''),
             gen.Statement('return false')
         ]))
 
@@ -587,6 +600,9 @@ class LangGenerator(generator.Generator):
         method.append(gen.Block([
             gen.Statement(f'if (cx::overflow::ge(block_id, _{program_name}_last_peeked))', ending=''),
             gen.Block([
+                gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
+                gen.Statement(f'spdlog::debug(" >> Peeking")'),
+                gen.Statement('#endif', ending=''),
                 gen.Statement(f'_{program_name}_last_peeked = block_id'),
                 gen.Statement(f'return peek_{program_name}(client, data, packet->timestamp())')
             ])
@@ -693,6 +709,9 @@ class LangGenerator(generator.Generator):
             marshal_update.append(gen.Statement(f'while (check_buffer(_{x}, block_id, _{x}_buffer_size))', ending=''))
             marshal_update.append(gen.Block([
                 gen.Statement(f'auto& data = _{x}.front()'),
+                gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
+                gen.Statement(f'spdlog::debug("Calling on_{x}@({{}} < {{}} - {{}})", data.block_id, block_id, _{x}_buffer_size)'),
+                gen.Statement('#endif', ending=''),
                 gen.Statement(f'on_{x}(client, data.data, data.timestamp)'),
                 gen.Statement(f'_{x}_last_called = data.block_id'),
                 gen.Statement(f'_{x}.pop_front()')
@@ -837,6 +856,9 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/cx/overflow.hpp>', ending=''),
+                gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
+                gen.Statement(f'#include <spdlog/spdlog.h>', ending=''),
+                gen.Statement('#endif', ending=''),
                 *marshal_include
             ]))
 
