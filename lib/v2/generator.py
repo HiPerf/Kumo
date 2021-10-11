@@ -225,6 +225,16 @@ class Generator(object):
         if self.is_program_sender(direction):
             self.queue_usage[program.queue.eval()].append(program_name)
 
+    def should_create_packer(self, direction):
+        return direction == Direction.BOTH or \
+            (direction == Direction.S2C and self.role == Role.SERVER) or \
+            (direction == Direction.C2S and self.role == Role.CLIENT)
+
+    def should_create_unpacker(self, direction):
+        return direction == Direction.BOTH or \
+            (direction == Direction.C2S and self.role == Role.SERVER) or \
+            (direction == Direction.S2C and self.role == Role.CLIENT)
+
     def generate_program(self, program):
         program_name = program.name.eval()
 
@@ -238,10 +248,7 @@ class Generator(object):
         assert len(args) == 1, "Multiple arguments have been deprecated"
         message = self.messages[args[0]]
 
-        if direction == Direction.BOTH or \
-            (direction == Direction.S2C and self.role == Role.SERVER) or \
-            (direction == Direction.C2S and self.role == Role.CLIENT):
-
+        if self.should_create_packer(direction):
             self.generate_structure(message)
             self.generate_message_packer(message)
             self._generate_program_send(program)
@@ -249,10 +256,7 @@ class Generator(object):
 
             self.generate_dependable_messages(message, self.generate_message_packer)
 
-        if direction == Direction.BOTH or \
-            (direction == Direction.C2S and self.role == Role.SERVER) or \
-            (direction == Direction.S2C and self.role == Role.CLIENT):
-            
+        if self.should_create_unpacker(direction):            
             self.generate_structure(message)
             self.generate_message_unpacker(message)
             self._generate_program_recv(program)
@@ -281,8 +285,18 @@ class Generator(object):
                 global_data_name = queue.specifier.args[1].eval()
                 message = self.messages[global_data_name]
                 
+                # Find queue direction based on progrems
+                program = next(program for program in self.programs.values() if self.queues[program.queue.eval()] == queue)
+                direction = program.direction.eval()
+
                 self.generate_structure(message)
-                self.generate_message_packer(message)
+                
+                if self.should_create_packer(direction):
+                    self.generate_message_packer(message)
+                
+                if self.should_create_unpacker(direction):
+                    self.generate_message_unpacker(message)
+                
                 self.generate_message_size(message)
 
         # Make sure everything is always sorted the same way

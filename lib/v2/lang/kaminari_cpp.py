@@ -92,6 +92,10 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PROTECTED, template=gen.Statement('template <typename T>', ending=''), decl_modifiers=['inline'])
         self.marshal_cls.methods.append(method)
         
+        method.append(gen.Statement('if (buffer.size() == buffer.capacity())', ending=''))
+        method.append(gen.Block([
+            gen.Statement('buffer.set_capacity(buffer.capacity() * 2)')
+        ]))
         method.append(gen.Statement('auto it = buffer.begin()'))
         method.append(gen.Statement('while (it != buffer.end())', ending=''))
         method.append(gen.Block([
@@ -189,12 +193,12 @@ class LangGenerator(generator.Generator):
                     gen.Statement(f'uint8_t size = packet->read<uint8_t>()'),
                     gen.Statement(f'for (int i = 0; i < size; ++i)', ending=''),
                     gen.Block([
-                        gen.Statement(f'{inner} data'),
-                        gen.Statement(f'if (unpack(packet, data)', ending=''),
+                        gen.Statement(f'{inner} data_{inner}'),
+                        gen.Statement(f'if (unpack(packet, data_{inner}))', ending=''),
                         gen.Block([
-                            gen.Statement(f'({variable}).push_back(std::move(data))')
+                            gen.Statement(f'({variable}).push_back(std::move(data_{inner}))')
                         ]),
-                        gen.Statement(f'else'),
+                        gen.Statement(f'else', ending=''),
                         gen.Block([
                             gen.Statement('return false')
                         ])
@@ -860,9 +864,12 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <concepts>', ending=''),
                 gen.Statement(f'#include <inttypes.h>', ending=''),
                 gen.Statement(f'#include <boost/intrusive_ptr.hpp>', ending=''),
+                gen.Statement(f'#include <boost/circular_buffer.hpp>', ending=''),
+                gen.Statement(f'#include <{include_path}/opcodes.hpp>', ending=''),
                 gen.Statement(f'#include <{include_path}/structs.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/client/basic_client.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/cx/overflow.hpp>', ending=''),
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
                 gen.Statement(f'#include <spdlog/spdlog.h>', ending=''),
