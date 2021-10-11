@@ -806,7 +806,7 @@ class LangGenerator(generator.Generator):
             # Constructor initializer
             message_name = to_camel_case(self.get_program_message(self.programs[program_name]))
             x = to_camel_case(program_name, capitalize=False)
-            marshal_constructor.append(gen.Statement(f'{x} = new SortedList<ushort, DataBuffer<{message_name}>>()'))
+            marshal_constructor.append(gen.Statement(f'{x} = new SortedList<ushort, DataBuffer<{message_name}>>(new Kaminari.DuplicateKeyComparer())'))
             marshal_constructor.append(gen.Statement(f'{x}BufferSize = {buffer_size}'))
             marshal_constructor.append(gen.Statement(f'{x}LastPeeked = 0'))
             marshal_constructor.append(gen.Statement(f'{x}LastCalled = 0'))
