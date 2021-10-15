@@ -815,7 +815,10 @@ class LangGenerator(generator.Generator):
             marshal_update.append(gen.Statement(f'while (checkBuffer({x}, blockId, {x}BufferSize))', ending=''))
             marshal_update.append(gen.Block([
                 gen.Statement(f'var data = {x}.Values[0]'),
-                gen.Statement(f'((IClient)client).on{to_camel_case(program_name)}(data.Data, data.Timestamp)'),
+                gen.Statement(f'if (!((IClient)client).on{to_camel_case(program_name)}(data.Data, data.Timestamp))', ending=''),
+                gen.Block([
+                    gen.Statement('break')
+                ]),
                 gen.Statement(f'{x}LastCalled = data.BlockId'),
                 gen.Statement(f'{x}.RemoveAt(0)')
             ]))

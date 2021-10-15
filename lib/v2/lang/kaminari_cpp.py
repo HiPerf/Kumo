@@ -724,7 +724,10 @@ class LangGenerator(generator.Generator):
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
                 gen.Statement(f'spdlog::debug("Calling on_{x}@({{}} < {{}} - {{}})", data.block_id, block_id, _{x}_buffer_size)'),
                 gen.Statement('#endif', ending=''),
-                gen.Statement(f'on_{x}(client, data.data, data.timestamp)'),
+                gen.Statement(f'if (!on_{x}(client, data.data, data.timestamp))', ending=''),
+                gen.Block([
+                    gen.Statement('break')
+                ]),
                 gen.Statement(f'_{x}_last_called = data.block_id'),
                 gen.Statement(f'_{x}.pop_front()')
             ]))
