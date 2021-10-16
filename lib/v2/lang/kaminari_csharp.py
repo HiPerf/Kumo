@@ -14,7 +14,7 @@ TYPE_CONVERSION = {
     'uint16':   'ushort',
     'uint32':   'uint',
     'uint64':   'ulong',
-    'int8':     'char',
+    'int8':     'sbyte',
     'int16':    'short',
     'int32':    'int',
     'int64':    'long',
