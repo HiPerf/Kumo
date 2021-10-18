@@ -708,7 +708,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'return {false_case}(client, packet.getOpcode())')
             ]))
         
-        method.append(gen.Statement(f'if (Kaminari.Overflow.le(blockId, {to_camel_case(program_name, capitalize=False)}LastCalled))', ending=''))
+        method.append(gen.Statement(f'if ({to_camel_case(program_name, capitalize=False)}SinceLastCalled < 100 && Kaminari.Overflow.le(blockId, {to_camel_case(program_name, capitalize=False)}LastCalled))', ending=''))
         method.append(gen.Block([
             gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
             gen.Statement('return true')
@@ -737,6 +737,7 @@ class LangGenerator(generator.Generator):
         self.marshal_cls.attributes.append(gen.Proppertie(f'byte', f'{to_camel_case(program_name, capitalize=False)}BufferSize', True, True))
         self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastPeeked'))
         self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastCalled'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'byte', f'{to_camel_case(program_name, capitalize=False)}SinceLastCalled'))
 
         return [method]
 
@@ -810,8 +811,10 @@ class LangGenerator(generator.Generator):
             marshal_constructor.append(gen.Statement(f'{x}BufferSize = {buffer_size}'))
             marshal_constructor.append(gen.Statement(f'{x}LastPeeked = 0'))
             marshal_constructor.append(gen.Statement(f'{x}LastCalled = 0'))
+            marshal_constructor.append(gen.Statement(f'{x}SinceLastCalled = 0'))
 
             # Update method
+            marshal_update.append(gen.Statement(f'{x}SinceLastCalled = Math.Max({x}SinceLastCalled, Kaminari.Overflow.inc({x}SinceLastCalled))'))
             marshal_update.append(gen.Statement(f'while (checkBuffer({x}, blockId, {x}BufferSize))', ending=''))
             marshal_update.append(gen.Block([
                 gen.Statement(f'var data = {x}.Values[0]'),
@@ -820,6 +823,7 @@ class LangGenerator(generator.Generator):
                     gen.Statement('break')
                 ]),
                 gen.Statement(f'{x}LastCalled = data.BlockId'),
+                gen.Statement(f'{x}SinceLastCalled = 0'),
                 gen.Statement(f'{x}.RemoveAt(0)')
             ]))
         
