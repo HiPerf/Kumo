@@ -561,7 +561,7 @@ class LangGenerator(generator.Generator):
         ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PRIVATE)
 
         method.append(gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''))
-        method.append(gen.Statement(f'spdlog::debug("Received packet `{program_name}({message_name})@{{}}` with _last_peeked={{}} (enabled={{}}), _last_called={{}} and _since_last_called={{}}", block_id, _{program_name}_last_peeked, has_peek_{program_name}<marshal>, _{program_name}_last_called, _{program_name}_since_last_called)'))
+        method.append(gen.Statement(f'spdlog::debug("Received packet `{program_name}({message_name})@{{}}` with _last_peeked={{}} & _since_last_peeked={{}} (enabled={{}}), _last_called={{}} and _since_last_called={{}}", block_id, _{program_name}_last_peeked, _{program_name}_since_last_peeked, has_peek_{program_name}<marshal>, _{program_name}_last_called, _{program_name}_since_last_called)'))
         method.append(gen.Statement('#endif', ending=''))
 
         if program.cond.attr is not None:
@@ -602,11 +602,13 @@ class LangGenerator(generator.Generator):
 
         method.append(gen.Statement(f'if constexpr (has_peek_{program_name}<marshal>)', ending=''))
         method.append(gen.Block([
-            gen.Statement(f'if (cx::overflow::ge(block_id, _{program_name}_last_peeked))', ending=''),
+            gen.Statement(f'_{program_name}_since_last_peeked = std::max(_{program_name}_since_last_peeked, cx::overflow::inc(_{program_name}_since_last_peeked))'),
+            gen.Statement(f'if (_{program_name}_since_last_peeked > 100 || cx::overflow::ge(block_id, _{program_name}_last_peeked))', ending=''),
             gen.Block([
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
                 gen.Statement(f'spdlog::debug(" >> Peeking")'),
                 gen.Statement('#endif', ending=''),
+                gen.Statement(f'_{program_name}_since_last_peeked = 0'),
                 gen.Statement(f'_{program_name}_last_peeked = block_id'),
                 gen.Statement(f'return peek_{program_name}(client, data, packet->timestamp())')
             ])
@@ -620,6 +622,7 @@ class LangGenerator(generator.Generator):
         self.marshal_cls.attributes.append(gen.Attribute(f'boost::circular_buffer<::kumo::data_buffer<::kumo::{message_name}>>', f'_{program_name}'))
         self.marshal_cls.attributes.append(gen.Attribute(f'uint8_t', f'_{program_name}_buffer_size'))
         self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_last_peeked'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_since_last_peeked'))
         self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_last_called'))
         self.marshal_cls.attributes.append(gen.Attribute(f'uint8_t', f'_{program_name}_since_last_called'))
 
@@ -698,12 +701,14 @@ class LangGenerator(generator.Generator):
             marshal_constructor.initializers.append(gen.Statement(f'_{x}({buffer_size * 2})', ending=''))
             marshal_constructor.initializers.append(gen.Statement(f'_{x}_buffer_size({buffer_size})', ending=''))
             marshal_constructor.initializers.append(gen.Statement(f'_{x}_last_peeked(0)', ending=''))
+            marshal_constructor.initializers.append(gen.Statement(f'_{x}_since_last_peeked(0)', ending=''))
             marshal_constructor.initializers.append(gen.Statement(f'_{x}_last_called(0)', ending=''))
             marshal_constructor.initializers.append(gen.Statement(f'_{x}_since_last_called(0)', ending=''))
 
             # Move constructor initializer
             marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_buffer_size(other._{x}_buffer_size)', ending=''))
             marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_last_peeked(other._{x}_last_peeked)', ending=''))
+            marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_since_last_peeked(other._{x}_since_last_peeked)', ending=''))
             marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_last_called(other._{x}_last_called)', ending=''))
             marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_since_last_called(other._{x}_since_last_called)', ending=''))
             marshal_move_constructor.append(gen.Statement(f'_{x}.swap(other._{x})'))
@@ -712,6 +717,7 @@ class LangGenerator(generator.Generator):
             marshal_move_op.append(gen.Statement(f'_{x}.swap(other._{x})'))
             marshal_move_op.append(gen.Statement(f'_{x}_buffer_size = other._{x}_buffer_size'))
             marshal_move_op.append(gen.Statement(f'_{x}_last_peeked = other._{x}_last_peeked'))
+            marshal_move_op.append(gen.Statement(f'_{x}_since_last_peeked = other._{x}_since_last_peeked'))
             marshal_move_op.append(gen.Statement(f'_{x}_last_called = other._{x}_last_called'))
             marshal_move_op.append(gen.Statement(f'_{x}_since_last_called = other._{x}_since_last_called'))
 
@@ -719,6 +725,7 @@ class LangGenerator(generator.Generator):
             marshal_reset.append(gen.Statement(f'_{x}.clear()'))
             marshal_reset.append(gen.Statement(f'_{x}_buffer_size = {buffer_size}'))
             marshal_reset.append(gen.Statement(f'_{x}_last_peeked = 0'))
+            marshal_reset.append(gen.Statement(f'_{x}_since_last_peeked = 0'))
             marshal_reset.append(gen.Statement(f'_{x}_last_called = 0'))
             marshal_reset.append(gen.Statement(f'_{x}_since_last_called = 0'))
 

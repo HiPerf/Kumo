@@ -722,8 +722,10 @@ class LangGenerator(generator.Generator):
 
         method.append(gen.Statement('// The user is assumed to provide all peek methods in C#', ending=''))
         method.append(gen.Statement('// TODO: Test if the method exists in the class', ending=''))
-        method.append(gen.Statement(f'if (Kaminari.Overflow.ge(blockId, {to_camel_case(program_name, capitalize=False)}LastPeeked))', ending=''))
+        method.append(gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastCalled = Math.Max({to_camel_case(program_name, capitalize=False)}SinceLastCalled, Kaminari.Overflow.inc({to_camel_case(program_name, capitalize=False)}SinceLastCalled))'))
+        method.append(gen.Statement(f'if ({to_camel_case(program_name, capitalize=False)}SinceLastPeeked > 100 || Kaminari.Overflow.ge(blockId, {to_camel_case(program_name, capitalize=False)}LastPeeked))', ending=''))
         method.append(gen.Block([
+            gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked = 0'),
             gen.Statement(f'{to_camel_case(program_name, capitalize=False)}LastPeeked = blockId'),
             gen.Statement(f'return client.peek{to_camel_case(program_name)}(data, packet.timestamp())')
         ]))
@@ -736,6 +738,7 @@ class LangGenerator(generator.Generator):
         self.marshal_cls.attributes.append(gen.Attribute(f'SortedList<ushort, DataBuffer<{to_camel_case(message_name)}>>', f'{to_camel_case(program_name, capitalize=False)}'))
         self.marshal_cls.attributes.append(gen.Proppertie(f'byte', f'{to_camel_case(program_name, capitalize=False)}BufferSize', True, True))
         self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastPeeked'))
+        self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked'))
         self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastCalled'))
         self.marshal_cls.attributes.append(gen.Attribute(f'byte', f'{to_camel_case(program_name, capitalize=False)}SinceLastCalled'))
 
@@ -810,6 +813,7 @@ class LangGenerator(generator.Generator):
             marshal_constructor.append(gen.Statement(f'{x} = new SortedList<ushort, DataBuffer<{message_name}>>(new Kaminari.DuplicateKeyComparer())'))
             marshal_constructor.append(gen.Statement(f'{x}BufferSize = {buffer_size}'))
             marshal_constructor.append(gen.Statement(f'{x}LastPeeked = 0'))
+            marshal_constructor.append(gen.Statement(f'{x}SinceLastPeeked = 0'))
             marshal_constructor.append(gen.Statement(f'{x}LastCalled = 0'))
             marshal_constructor.append(gen.Statement(f'{x}SinceLastCalled = 0'))
 
