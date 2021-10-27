@@ -6,6 +6,8 @@ pg = ParserGenerator([
     "EQUALS",
     "LBRACE",
     "RBRACE",
+    "LBRACKET",
+    "RBRACKET",
     "LPAREN",
     "RPAREN",
     "LACUTE",
@@ -13,7 +15,6 @@ pg = ParserGenerator([
     "OR",
     "NUMBER",
     "MESSAGE",
-    "OPTIONAL",
     "QUEUE",
     "C2S",
     "S2C", 
@@ -95,17 +96,13 @@ def expr_fields(p):
 def expr_empty_fields(p):
     return FieldsBox()
 
-@pg.production("declaration : type identifier SEMICOLON")
+@pg.production("declaration : options type identifier SEMICOLON")
 def declaration(p):
-    return DeclarationBox(p[0], p[1], False)
+    return DeclarationBox(p[0], p[1], p[2])
 
-@pg.production("declaration : OPTIONAL type identifier SEMICOLON")
-def optional_declaration(p): 
-    return DeclarationBox(p[1], p[2], True)
-
-@pg.production("queue : QUEUE identifier COLON queue_subtype LBRACE LACUTE queue_specifier RACUTE RBRACE")
+@pg.production("queue : options QUEUE identifier COLON queue_subtype LBRACE LACUTE queue_specifier RACUTE RBRACE")
 def queue(p):
-    return QueueBox(p[1], p[3], p[6])
+    return QueueBox(p[0], p[2], p[4], p[7])
 
 @pg.production("queue_subtype : identifier")
 def queue_subtype_simple(p):
@@ -130,6 +127,18 @@ def queue_specifier_array(p):
 @pg.production("queue_specifier : ")
 def queue_specifier_standard(p):
     return QueueSpecifierBox(QueueSpecifierType.STANDARD, None)
+
+@pg.production("options : options option")
+def options(p):
+    return OptionsBox(p[0], p[1])
+
+@pg.production("options : ")
+def options_empty(p):
+    return OptionsBox()
+
+@pg.production("option : LBRACKET identifier RBRACKET")
+def option(p):
+    return p[1]
 
 @pg.production("complex : identifier complex_postfix ")
 def complex(p):

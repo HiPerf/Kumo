@@ -95,7 +95,7 @@ class Generator(object):
             (self.role == Role.SERVER and direction == Direction.S2C)
 
     def message_fields_including_base(self, message):
-        fields = message.fields.eval()
+        fields = [x for x in message.fields.eval() if not x.ignore]
 
         if message.base.name is not None:
             base = message.base.name.eval()
@@ -105,6 +105,9 @@ class Generator(object):
                 return self._base_message_fields(base) + fields
 
         return fields
+
+    def message_ignore_fields(self, message):
+        return [x for x in message.fields.eval() if x.ignore]
 
     def can_queue_have_callback(self, queue):
         # Standard queues are IMMEDIATE packers, which means they can have callbacks

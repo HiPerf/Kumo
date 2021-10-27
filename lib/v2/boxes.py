@@ -65,10 +65,18 @@ class MessageQueueBox(BaseBox):
             print(self.identifier.eval() + "(" + self.idx.eval() + ")")
 
 class DeclarationBox(BaseBox):
-    def __init__(self, dtype, name, optional):
+    def __init__(self, options, dtype, name):
+        self.options = options
         self.dtype = dtype
         self.name = name
-        self.optional = optional
+
+    @property
+    def optional(self):
+        return any(opt.eval() == 'optional' for opt in self.options.eval())
+
+    @property
+    def ignore(self):
+        return any(opt.eval() == 'ignore' for opt in self.options.eval())
 
     def eval(self):
         print(self.dtype.eval() + " " + self.name.eval())
@@ -99,6 +107,16 @@ class FieldsBox(BaseBox):
         if self.fields:
             return self.fields.eval() + [self.field]
         return []
+    
+class OptionsBox(BaseBox):
+    def __init__(self, options=None, option=None):
+        self.options = options
+        self.option = option
+
+    def eval(self):
+        if self.options:
+            return self.options.eval() + [self.option]
+        return []
 
 class MessageBox(BaseBox):
     def __init__(self, name, fields, base):
@@ -124,7 +142,8 @@ class ProgramBox(BaseBox):
         self.cond = cond
 
 class QueueBox(BaseBox):
-    def __init__(self, name, base, specifier):
+    def __init__(self, options, name, base, specifier):
+        self.options = options
         self.name = name
         self.base = base
         self.specifier = specifier

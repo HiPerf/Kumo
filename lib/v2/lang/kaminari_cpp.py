@@ -375,12 +375,18 @@ class LangGenerator(generator.Generator):
         methods.append(method)
 
         if self.__is_trivial(message):
+            message_size_str = f'sizeof({message_name})'
+            ignore_fields = self.message_ignore_fields(message)
+            for decl in ignore_fields:
+                dtype = decl.dtype.dtype.eval()
+                message_size_str += f' - sizeof_{dtype}()'
+
             method.append(gen.Statement('(void)data'))
-            method.append(gen.Statement(f'return sizeof({message_name})'))
+            method.append(gen.Statement(f'return {message_size_str}'))
 
             # Method without parameter
             method = gen.Method('uint8_t', f'sizeof_{message_name}', decl_modifiers=['static'], visibility=gen.Visibility.PUBLIC)
-            method.append(gen.Statement(f'return sizeof({message_name})'))
+            method.append(gen.Statement(f'return {message_size_str}'))
             methods.append(method)
         else:
             method.append(gen.Statement('uint8_t size = 0'))    
@@ -748,6 +754,18 @@ class LangGenerator(generator.Generator):
         
         # Finish operator=
         marshal_move_op.append(gen.Statement(f'return *this'))
+
+        # General broadcast method
+        for suffix in ('', '_single'):
+            method = gen.Method('void', f'broadcast{suffix}', [
+                gen.Variable('::kaminari::broadcaster<B>*', 'broadcaster'),
+                gen.Variable(f'C&&', 'callback')
+            ], visibility=gen.Visibility.PUBLIC, template=gen.Statement('template <typename B, typename C>', ending=''))
+
+            method.append(gen.Statement(f'broadcaster->broadcast{suffix}_with_callback([&callback](auto&&... callback_data) {{', ending=''))
+            method.append(gen.Scope([gen.Statement(f'callback(std::forward<decltype(callback_data)>(callback_data)...)')], True))
+            method.append(gen.Statement(f'}})'))
+            self.rpc_file.add(method)
 
         # Opcodes enum
         opcodes = gen.Scope([
