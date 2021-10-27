@@ -13,6 +13,7 @@ BASE_PACKERS = (
     'most_recent',
     'unique_merge_packer',
     'vector_merge_packer',
+    'vector_merge_with_priority_packer',
     'merge_packer',
     'ordered_packer',
     'immediate_packer'

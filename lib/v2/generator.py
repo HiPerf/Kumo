@@ -94,8 +94,10 @@ class Generator(object):
         return (self.role == Role.CLIENT and direction == Direction.C2S) or \
             (self.role == Role.SERVER and direction == Direction.S2C)
 
-    def message_fields_including_base(self, message):
-        fields = [x for x in message.fields.eval() if not x.ignore]
+    def _message_fields_including_base(self, message, include_ignored):
+        fields = message.fields.eval()
+        if not include_ignored:
+            fields = [x for x in fields if not x.ignore]
 
         if message.base.name is not None:
             base = message.base.name.eval()
@@ -105,6 +107,12 @@ class Generator(object):
                 return self._base_message_fields(base) + fields
 
         return fields
+
+    def message_fields_including_base_and_ignored(self, message):
+        return self._message_fields_including_base(message, True)
+
+    def message_fields_including_base(self, message):
+        return self._message_fields_including_base(message, False)
 
     def message_ignore_fields(self, message):
         return [x for x in message.fields.eval() if x.ignore]

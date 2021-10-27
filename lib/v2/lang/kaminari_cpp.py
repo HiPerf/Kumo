@@ -274,7 +274,7 @@ class LangGenerator(generator.Generator):
         #    base = f': public {message.base.name.eval()}'
 
         struct = gen.Class(message_name, decl_name_base=base, cpp_style=True, keyword='struct')
-        for decl in self.message_fields_including_base(message):
+        for decl in self.message_fields_including_base_and_ignored(message):
             dtype = decl.dtype.dtype.eval()
             ctype = '{}'
             if decl.optional:
@@ -966,6 +966,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <kaminari/packers/ordered_packer.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/packers/unique_merge_packer.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/packers/vector_merge_packer.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/packers/vector_merge_with_priority_packer.hpp>', ending=''),
                 kaminari_fwd([
                     gen.Statement('namespace buffers', ending=''),
                     gen.Block([

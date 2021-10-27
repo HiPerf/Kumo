@@ -369,7 +369,7 @@ class LangGenerator(generator.Generator):
                 base = f' : {to_camel_case(base_name)}'
 
         struct = gen.Class(to_camel_case(message_name), decl_name_base=base, csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value])
-        for decl in it.chain(self._base_message_fields(base_name), message.fields.eval()) :
+        for decl in self.message_fields_including_base_and_ignored(message):
             dtype = decl.dtype.dtype.eval()
             ctype = '{}'
             if decl.optional:
