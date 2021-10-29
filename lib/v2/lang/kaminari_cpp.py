@@ -583,7 +583,7 @@ class LangGenerator(generator.Generator):
             method.append(gen.Statement(f'if (!check_client_{attr}(client, {value}))', ending=''))
             method.append(gen.Block([
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
-                gen.Statement(f'spdlog::debug(" > Failed check")'),
+                gen.Statement(f'spdlog::KUMO_ERROR_LOG_LEVEL(" > Failed check")'),
                 gen.Statement('#endif', ending=''),
                 gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()))')
             ]))
@@ -592,7 +592,7 @@ class LangGenerator(generator.Generator):
         method.append(gen.Block([
             gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
             gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
-            gen.Statement(f'spdlog::debug(" > Out of order")'),
+            gen.Statement(f'spdlog::KUMO_ERROR_LOG_LEVEL(" > Out of order")'),
             gen.Statement('#endif', ending=''),
             gen.Statement('return true')
         ]))
@@ -601,7 +601,7 @@ class LangGenerator(generator.Generator):
         method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
         method.append(gen.Block([
             gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
-            gen.Statement(f'spdlog::debug(" > Failed to unpack")'),
+            gen.Statement(f'spdlog::KUMO_ERROR_LOG_LEVEL(" > Failed to unpack")'),
             gen.Statement('#endif', ending=''),
             gen.Statement('return false')
         ]))
@@ -907,6 +907,9 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <kaminari/client/basic_client.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/cx/overflow.hpp>', ending=''),
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
+                gen.Statement('#if !defined(KUMO_ERROR_LOG_LEVEL)', ending=''),
+                gen.Statement('#define KUMO_ERROR_LOG_LEVEL critical', ending=''),
+                gen.Statement('#endif', ending=''),
                 gen.Statement(f'#include <spdlog/spdlog.h>', ending=''),
                 gen.Statement('#endif', ending=''),
                 *marshal_include

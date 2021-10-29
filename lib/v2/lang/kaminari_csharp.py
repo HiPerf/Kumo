@@ -722,7 +722,7 @@ class LangGenerator(generator.Generator):
 
         method.append(gen.Statement('// The user is assumed to provide all peek methods in C#', ending=''))
         method.append(gen.Statement('// TODO: Test if the method exists in the class', ending=''))
-        method.append(gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastCalled = Math.Max({to_camel_case(program_name, capitalize=False)}SinceLastCalled, Kaminari.Overflow.inc({to_camel_case(program_name, capitalize=False)}SinceLastCalled))'))
+        method.append(gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked = Math.Max({to_camel_case(program_name, capitalize=False)}SinceLastPeeked, Kaminari.Overflow.inc({to_camel_case(program_name, capitalize=False)}SinceLastCalled))'))
         method.append(gen.Statement(f'if ({to_camel_case(program_name, capitalize=False)}SinceLastPeeked > 100 || Kaminari.Overflow.ge(blockId, {to_camel_case(program_name, capitalize=False)}LastPeeked))', ending=''))
         method.append(gen.Block([
             gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked = 0'),
