@@ -686,7 +686,7 @@ class LangGenerator(generator.Generator):
         program_name = program.name.eval()
         message_name = self.get_program_message(program)
 
-        method = gen.Method('bool', f'handle{to_camel_case(program_name)}', [
+        method = gen.Method('Kaminari.MarshalParseState', f'handle{to_camel_case(program_name)}', [
             gen.Variable('Kaminari.IMarshal', 'marshal'),
             gen.Variable('Kaminari.PacketReader', 'packet'),
             gen.Variable('IClient', 'client'),
@@ -705,19 +705,19 @@ class LangGenerator(generator.Generator):
             #method.append(gen.Statement(f'if (client->{attr}() != {attr}::{value})', ending=''))
             method.append(gen.Statement(f'if (!client.check(client, "{attr}", {value}))', ending=''))
             method.append(gen.Block([
-                gen.Statement(f'return {false_case}(client, packet.getOpcode())')
+                gen.Statement(f'{false_case}(client, packet.getOpcode())'),
+                gen.Statement(f'return Kaminari.MarshalParseState.ParsingSkipped')
             ]))
         
         method.append(gen.Statement(f'if ({to_camel_case(program_name, capitalize=False)}SinceLastCalled < 100 && Kaminari.Overflow.le(blockId, {to_camel_case(program_name, capitalize=False)}LastCalled))', ending=''))
         method.append(gen.Block([
-            gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
-            gen.Statement('return true')
+            gen.Statement('return Kaminari.MarshalParseState.ParsingSkipped')
         ]))
 
         method.append(gen.Statement(f'var data = emplaceData({to_camel_case(program_name, capitalize=False)}, blockId, packet.timestamp())'))
         method.append(gen.Statement(f'if (!data.unpack(marshal, packet))', ending=''))
         method.append(gen.Block([
-            gen.Statement('return false')
+            gen.Statement('return Kaminari.MarshalParseState.ParsingFailed')
         ]))
 
         method.append(gen.Statement('// The user is assumed to provide all peek methods in C#', ending=''))
@@ -727,10 +727,11 @@ class LangGenerator(generator.Generator):
         method.append(gen.Block([
             gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked = 0'),
             gen.Statement(f'{to_camel_case(program_name, capitalize=False)}LastPeeked = blockId'),
-            gen.Statement(f'return client.peek{to_camel_case(program_name)}(data, packet.timestamp())')
+            gen.Statement(f'client.peek{to_camel_case(program_name)}(data, packet.timestamp())'),
+            gen.Statement(f'return Kaminari.MarshalParseState.ParsingDone')
         ]))
 
-        method.append(gen.Statement(f'return true'))
+        method.append(gen.Statement(f'return Kaminari.MarshalParseState.ParsingDone'))
 
         self.handler_programs.add(program_name)
         self.marshal_cls.methods.append(method)
@@ -772,7 +773,7 @@ class LangGenerator(generator.Generator):
         method.append(gen.Statement('return 0'))
 
         # General packet handler
-        method = gen.Method('bool', 'handlePacket<T>', [
+        method = gen.Method('Kaminari.MarshalParseState', 'handlePacket<T>', [
             gen.Variable('Kaminari.PacketReader', 'packet'),
             gen.Variable('T', 'client'),
             gen.Variable('ushort', 'blockId')
@@ -789,10 +790,53 @@ class LangGenerator(generator.Generator):
         ] + [gen.Scope([
             gen.Statement(f'default:', ending=''),
             gen.Scope([
-                gen.Statement(f'return false') 
+                gen.Statement(f'return Kaminari.MarshalParseState.ParsingFailed') 
             ], indent=True)
         ])]))
 
+        self.marshal_cls.methods.append(method)
+
+        # General packet to size
+        method = gen.Method('int', 'PacketSize', [
+            gen.Variable('Kaminari.PacketReader', 'packet')
+        ], visibility=gen.Visibility.PUBLIC)
+
+        method.append(gen.Statement('switch (packet.getOpcode())', ending=''))
+        cases_block = gen.Block()
+        for program in self.handler_programs:
+            message_name = self.get_program_message(self.programs[program])
+            message = self.messages[message_name]
+            message_name = to_camel_case(message_name)
+
+            if self.__is_trivial(message):
+                cases_block.append(gen.Scope([
+                    gen.Statement(f'case (ushort)Opcodes.opcode{to_camel_case(program)}:', ending=''),
+                    gen.Scope([
+                        gen.Statement(f'return size<{message_name}>()')
+                    ], indent=True)
+                ]))
+            else:
+                cases_block.append(gen.Scope([
+                    gen.Statement(f'case (ushort)Opcodes.opcode{to_camel_case(program)}:', ending=''),
+                    gen.Block([
+                        gen.Statement(f'{message_name} data = new {message_name}()'),
+                        gen.Statement(f'if (!data.unpack(this, packet))', ending=''),
+                        gen.Block([
+                            gen.Statement('// TODO(gpascualg): What to do if we can\'t get a packet size?'),
+                            gen.Statement('return 0xFFFF')
+                        ]),
+                        gen.Statement(f'return data.size(this)')
+                    ])
+                ]))
+        
+        cases_block.append(gen.Scope([
+            gen.Statement(f'default:', ending=''),
+            gen.Scope([
+                gen.Statement(f'return 0xFFFF') 
+            ], indent=True)
+        ]))
+
+        method.append(cases_block)
         self.marshal_cls.methods.append(method)
 
         # Generated constructor and update methods
@@ -801,9 +845,11 @@ class LangGenerator(generator.Generator):
             gen.Variable('T', 'client'),
             gen.Variable('ushort', 'blockId')
         ], visibility=gen.Visibility.PUBLIC, postfix=' where T : Kaminari.IBaseClient')
+        marshal_reset = gen.Method('void', 'Reset', visibility=gen.Visibility.PUBLIC)
 
         self.marshal_cls.methods.append(marshal_constructor)
         self.marshal_cls.methods.append(marshal_update)
+        self.marshal_cls.methods.append(marshal_reset)
 
         buffer_size = self.config.get("buffer_size", 2)
         for program_name in self.recv_list:
@@ -830,6 +876,13 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'{x}SinceLastCalled = 0'),
                 gen.Statement(f'{x}.RemoveAt(0)')
             ]))
+
+            # Reset
+            marshal_reset.append(gen.Statement(f'{x}BufferSize = {buffer_size}'))
+            marshal_reset.append(gen.Statement(f'{x}LastPeeked = 0'))
+            marshal_reset.append(gen.Statement(f'{x}SinceLastPeeked = 255'))
+            marshal_reset.append(gen.Statement(f'{x}LastCalled = 0'))
+            marshal_reset.append(gen.Statement(f'{x}SinceLastCalled = 255'))
         
         # IClient
         for program_name in self.handler_programs:

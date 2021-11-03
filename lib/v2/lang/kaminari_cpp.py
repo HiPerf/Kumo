@@ -560,7 +560,7 @@ class LangGenerator(generator.Generator):
         program_name = program.name.eval()
         message_name = self.get_program_message(program)
 
-        method = gen.Method('bool', f'handle_{program_name}', [
+        method = gen.Method('::kaminari::marshal_parse_state', f'handle_{program_name}', [
             gen.Variable('C*', 'client'),
             gen.Variable('::kaminari::buffers::packet_reader*', 'packet'),
             gen.Variable('uint16_t', 'block_id'),
@@ -585,7 +585,8 @@ class LangGenerator(generator.Generator):
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
                 gen.Statement(f'spdlog::KUMO_ERROR_LOG_LEVEL(" > Failed check")'),
                 gen.Statement('#endif', ending=''),
-                gen.Statement(f'return {false_case}(client, static_cast<::kumo::opcode>(packet->opcode()))')
+                gen.Statement(f'{false_case}(client, static_cast<::kumo::opcode>(packet->opcode()))'),
+                gen.Statement('return ::kaminari::marshal_parse_state::parsing_skipped')
             ]))
         
         method.append(gen.Statement(f'if (_{program_name}_since_last_called < 100 && cx::overflow::le(block_id, _{program_name}_last_called))', ending=''))
@@ -594,7 +595,7 @@ class LangGenerator(generator.Generator):
             gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
             gen.Statement(f'spdlog::KUMO_ERROR_LOG_LEVEL(" > Out of order")'),
             gen.Statement('#endif', ending=''),
-            gen.Statement('return true')
+            gen.Statement('return ::kaminari::marshal_parse_state::parsing_skipped')
         ]))
 
         method.append(gen.Statement(f'auto& data = emplace_data(_{program_name}, block_id, packet->timestamp())'))
@@ -603,7 +604,7 @@ class LangGenerator(generator.Generator):
             gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
             gen.Statement(f'spdlog::KUMO_ERROR_LOG_LEVEL(" > Failed to unpack")'),
             gen.Statement('#endif', ending=''),
-            gen.Statement('return false')
+            gen.Statement('return ::kaminari::marshal_parse_state::parsing_failed')
         ]))
 
         method.append(gen.Statement(f'if constexpr (has_peek_{program_name}<marshal>)', ending=''))
@@ -616,11 +617,12 @@ class LangGenerator(generator.Generator):
                 gen.Statement('#endif', ending=''),
                 gen.Statement(f'_{program_name}_since_last_peeked = 0'),
                 gen.Statement(f'_{program_name}_last_peeked = block_id'),
-                gen.Statement(f'return peek_{program_name}(client, data, packet->timestamp())')
+                gen.Statement(f'peek_{program_name}(client, data, packet->timestamp())'),
+                gen.Statement('return ::kaminari::marshal_parse_state::parsing_done')
             ])
         ]))
 
-        method.append(gen.Statement('return true'))
+        method.append(gen.Statement('return ::kaminari::marshal_parse_state::parsing_done'))
 
         self.handler_programs.add(program_name)
         self.marshal_cls.methods.append(method)
@@ -662,7 +664,7 @@ class LangGenerator(generator.Generator):
             self.marshal_cls.methods.append(method)
 
         # General packet handler
-        method = gen.Method('bool', 'handle_packet', [
+        method = gen.Method('::kaminari::marshal_parse_state', 'handle_packet', [
             gen.Variable('C*', 'client'),
             gen.Variable('::kaminari::buffers::packet_reader*', 'packet'),
             gen.Variable('uint16_t', 'block_id')
@@ -679,10 +681,52 @@ class LangGenerator(generator.Generator):
         ] + [gen.Scope([
             gen.Statement(f'default:', ending=''),
             gen.Scope([
-                gen.Statement(f'return false') 
+                gen.Statement(f'return ::kaminari::marshal_parse_state::parsing_failed') 
             ], indent=True)
         ])]))
 
+        self.marshal_cls.methods.append(method)
+
+        # General packet to size
+        method = gen.Method('uint16_t', 'packet_size', [
+            gen.Variable('::kaminari::buffers::packet_reader*', 'packet')
+        ], visibility=gen.Visibility.PUBLIC)
+
+        method.append(gen.Statement('switch (static_cast<::kumo::opcode>(packet->opcode()))', ending=''))
+        cases_block = gen.Block()
+        for program in self.handler_programs:
+            message_name = self.get_program_message(self.programs[program])
+            message = self.messages[message_name]
+
+            if self.__is_trivial(message):
+                cases_block.append(gen.Scope([
+                    gen.Statement(f'case opcode::{program}:', ending=''),
+                    gen.Scope([
+                        gen.Statement(f'return sizeof_{message_name}()')
+                    ], indent=True)
+                ]))
+            else:
+                cases_block.append(gen.Scope([
+                    gen.Statement(f'case opcode::{program}:', ending=''),
+                    gen.Block([
+                        gen.Statement(f'{message_name} data'),
+                        gen.Statement(f'if (!unpack(packet, data))', ending=''),
+                        gen.Block([
+                            gen.Statement('// TODO(gpascualg): What to do if we can\'t get a packet size?'),
+                            gen.Statement('return 0xFFFF')
+                        ]),
+                        gen.Statement('return packet_size(data)')
+                    ])
+                ]))
+        
+        cases_block.append(gen.Scope([
+            gen.Statement(f'default:', ending=''),
+            gen.Scope([
+                gen.Statement(f'return 0xFFFF') 
+            ], indent=True)
+        ]))
+
+        method.append(cases_block)
         self.marshal_cls.methods.append(method)
 
         # Generated constructor and update methods
@@ -808,12 +852,14 @@ class LangGenerator(generator.Generator):
         queues.methods.append(ack)
 
         process = gen.Method('void', 'process', [
+            gen.Variable('uint16_t', 'tick_id'),
             gen.Variable('uint16_t', 'block_id'),
             gen.Variable('uint16_t&', 'remaining'),
+            gen.Variable('bool&', 'unfitting_data'),
             gen.Variable('typename ::kaminari::detail::packets_by_block&', 'by_block')
         ], visibility=gen.Visibility.PUBLIC)
         process.append(gen.Scope([
-            gen.Statement(f'_{queue}.process(block_id, remaining, by_block)') for queue in self.queues.keys() if self.queue_usage[queue]
+            gen.Statement(f'_{queue}.process(tick_id, block_id, remaining, unfitting_data, by_block)') for queue in self.queues.keys() if self.queue_usage[queue]
         ]))
         queues.methods.append(process)
 
@@ -906,6 +952,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <kaminari/buffers/packet_reader.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/client/basic_client.hpp>', ending=''),
                 gen.Statement(f'#include <kaminari/cx/overflow.hpp>', ending=''),
+                gen.Statement(f'#include <kaminari/marshal_parse_state.hpp>', ending=''),
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
                 gen.Statement('#if !defined(KUMO_ERROR_LOG_LEVEL)', ending=''),
                 gen.Statement('#define KUMO_ERROR_LOG_LEVEL critical', ending=''),

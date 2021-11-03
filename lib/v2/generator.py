@@ -72,9 +72,9 @@ class Generator(object):
         def get_digest(h, encoded):
             h.update(encoded)
         
-            # Keep higher most byte reserved for encryption flag
+            # Keep 4 lowermost bytes reserved
             digest = bytearray(h.digest())
-            digest[0] = digest[0] & (~(1 << 7))
+            digest[1] = digest[1] & (~((1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)))
             digest = bytearray.hex(digest)
             return digest
         
