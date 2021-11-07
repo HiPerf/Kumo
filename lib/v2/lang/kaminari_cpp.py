@@ -775,9 +775,9 @@ class LangGenerator(generator.Generator):
             marshal_reset.append(gen.Statement(f'_{x}.clear()'))
             marshal_reset.append(gen.Statement(f'_{x}_buffer_size = {buffer_size}'))
             marshal_reset.append(gen.Statement(f'_{x}_last_peeked = 0'))
-            marshal_reset.append(gen.Statement(f'_{x}_since_last_peeked = 0'))
+            marshal_reset.append(gen.Statement(f'_{x}_since_last_peeked = 200'))
             marshal_reset.append(gen.Statement(f'_{x}_last_called = 0'))
-            marshal_reset.append(gen.Statement(f'_{x}_since_last_called = 0'))
+            marshal_reset.append(gen.Statement(f'_{x}_since_last_called = 200'))
 
             # Update method
             marshal_update.append(gen.Statement(f'_{x}_since_last_called = std::max(_{x}_since_last_called, cx::overflow::inc(_{x}_since_last_called))'))
