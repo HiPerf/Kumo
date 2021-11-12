@@ -84,21 +84,18 @@ class LangGenerator(generator.Generator):
         data_struct = gen.Class('DataBuffer<T>', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], postfix=' where T : new()')
         data_struct.attributes.append(gen.Attribute('T', 'Data', visibility=gen.Visibility.PUBLIC))
         data_struct.attributes.append(gen.Attribute('ushort', 'BlockId', visibility=gen.Visibility.PUBLIC))
-        data_struct.attributes.append(gen.Attribute('ulong', 'Timestamp', visibility=gen.Visibility.PUBLIC))
         self.marshal_file.add(data_struct)
 
         # Helper method for marhsal
         method = gen.Method('T', f'emplaceData<T>', [
             gen.Variable('SortedList<ushort, DataBuffer<T>>', 'buffer'),
-            gen.Variable('ushort', 'blockId'),
-            gen.Variable('ulong', 'timestamp')
+            gen.Variable('ushort', 'blockId')
         ], visibility=gen.Visibility.PROTECTED, postfix=' where T : new()')
         self.marshal_cls.methods.append(method)
 
         method.append(gen.Statement('var data = new DataBuffer<T>', ending=''))
         method.append(gen.Block([
             gen.Statement('BlockId = blockId', ending=','),
-            gen.Statement('Timestamp = timestamp', ending=','),
             gen.Statement('Data = new T()', ending='')
         ], ending=';'))
         method.append(gen.Statement('buffer.Add(blockId, data)'))
@@ -714,7 +711,7 @@ class LangGenerator(generator.Generator):
             gen.Statement('return Kaminari.MarshalParseState.ParsingSkipped')
         ]))
 
-        method.append(gen.Statement(f'var data = emplaceData({to_camel_case(program_name, capitalize=False)}, blockId, packet.timestamp())'))
+        method.append(gen.Statement(f'var data = emplaceData({to_camel_case(program_name, capitalize=False)}, blockId)'))
         method.append(gen.Statement(f'if (!data.unpack(marshal, packet))', ending=''))
         method.append(gen.Block([
             gen.Statement('return Kaminari.MarshalParseState.ParsingFailed')
@@ -727,7 +724,7 @@ class LangGenerator(generator.Generator):
         method.append(gen.Block([
             gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked = 0'),
             gen.Statement(f'{to_camel_case(program_name, capitalize=False)}LastPeeked = blockId'),
-            gen.Statement(f'client.peek{to_camel_case(program_name)}(data, packet.timestamp())'),
+            gen.Statement(f'client.peek{to_camel_case(program_name)}(data, blockId)'),
             gen.Statement(f'return Kaminari.MarshalParseState.ParsingDone')
         ]))
 
@@ -868,7 +865,7 @@ class LangGenerator(generator.Generator):
             marshal_update.append(gen.Statement(f'while (checkBuffer({x}, blockId, {x}BufferSize))', ending=''))
             marshal_update.append(gen.Block([
                 gen.Statement(f'var data = {x}.Values[0]'),
-                gen.Statement(f'if (!((IClient)client).on{to_camel_case(program_name)}(data.Data, data.Timestamp))', ending=''),
+                gen.Statement(f'if (!((IClient)client).on{to_camel_case(program_name)}(data.Data, data.BlockId))', ending=''),
                 gen.Block([
                     gen.Statement('break')
                 ]),
@@ -900,7 +897,7 @@ class LangGenerator(generator.Generator):
                 f'on{to_camel_case(program_name)}',
                 [
                     gen.Variable(to_camel_case(message), 'data'), 
-                    gen.Variable('ulong', 'timestamp')
+                    gen.Variable('ushort', 'blockId')
                 ],
                 visibility=gen.Visibility.PUBLIC,
                 interface=True,
@@ -912,7 +909,7 @@ class LangGenerator(generator.Generator):
                 f'peek{to_camel_case(program_name)}',
                 [
                     gen.Variable(to_camel_case(message), 'data'), 
-                    gen.Variable('ulong', 'timestamp')
+                    gen.Variable('ushort', 'blockId')
                 ],
                 visibility=gen.Visibility.PUBLIC,
                 interface=True,
@@ -957,12 +954,14 @@ class LangGenerator(generator.Generator):
         queues.methods.append(ack)
 
         process = gen.Method('void', 'process', [
+            gen.Variable('ushort', 'tickId'),
             gen.Variable('ushort', 'blockId'),
             gen.Variable('ref ushort', 'remaining'),
+            gen.Variable('ref bool', 'unfittingData'),
             gen.Variable('SortedDictionary<uint, List<Kaminari.Packet>>', 'byBlock')
         ], visibility=gen.Visibility.PUBLIC)
         process.append(gen.Scope([
-            gen.Statement(f'{to_camel_case(queue, False)}.process(Marshal.instance, blockId, ref remaining, byBlock)') for queue in self.queues.keys() if self.queue_usage[queue]
+            gen.Statement(f'{to_camel_case(queue, False)}.process(Marshal.instance, tickId, blockId, ref remaining, ref unfittingData, byBlock)') for queue in self.queues.keys() if self.queue_usage[queue]
         ]))
         queues.methods.append(process)
 

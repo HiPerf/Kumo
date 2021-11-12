@@ -221,7 +221,7 @@ class Proppertie(Attribute):
         self.ending = ''
 
 class Class(object):
-    def __init__(self, name, decl_modifiers=None, decl_name_base='', template=(None, None), cpp_style=False, csharp_style=False, keyword='class', postfix=''):
+    def __init__(self, name, decl_modifiers=None, decl_name_base='', template=(None, None), cpp_style=False, csharp_style=False, keyword='class', postfix='', pack=False):
         self.keyword = keyword
         self.name = name
         self.postfix = postfix
@@ -233,6 +233,7 @@ class Class(object):
         self.template_names = template[1]
         self.methods = []
         self.attributes = []
+        self.pack = pack
 
     def _decl_attributes(self, visibility, level, eval_fn=None):
         modifiers = [] if not self.csharp_style else [visibility.value]
@@ -305,10 +306,12 @@ class Class(object):
     def both(self, level, eval_fn=None):
         template_preface, _ = self._get_template_args(level)
         modifiers = '' if not self.decl_modifiers else (' '.join(self.decl_modifiers) + ' ')
+        if self.pack:
+            modifiers = 'PACK(' + modifiers
         ending = '' if not self.cpp_style else ';'
         cls = indent(f'{modifiers}{self.keyword} {self.name}{self.decl_name_base}{self.postfix}\n', level)
         preface = indent('{\n', level)
-        postface = indent('}' + ending + '\n', level)
+        postface = indent('}' + ('' if not self.pack else ')') + ending + '\n', level)
 
         if self.cpp_style:
             # eval_fn is omitted on purpouse in the _decl_methods calls

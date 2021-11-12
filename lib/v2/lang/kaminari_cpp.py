@@ -82,13 +82,11 @@ class LangGenerator(generator.Generator):
         data_struct = gen.Class('data_buffer', keyword='struct', cpp_style=True, template=(gen.Statement('template <typename T>', ending=''), 'T'))
         data_struct.attributes.append(gen.Attribute('T', 'data', visibility=gen.Visibility.PUBLIC))
         data_struct.attributes.append(gen.Attribute('uint16_t', 'block_id', visibility=gen.Visibility.PUBLIC))
-        data_struct.attributes.append(gen.Attribute('uint64_t', 'timestamp', visibility=gen.Visibility.PUBLIC))
 
         # Helper method for marhsal
         method = gen.Method('T&', f'emplace_data', [
             gen.Variable('boost::circular_buffer<data_buffer<T>>&', 'buffer'),
-            gen.Variable('uint16_t', 'block_id'),
-            gen.Variable('uint64_t', 'timestamp')
+            gen.Variable('uint16_t', 'block_id')
         ], visibility=gen.Visibility.PROTECTED, template=gen.Statement('template <typename T>', ending=''), decl_modifiers=['inline'])
         self.marshal_cls.methods.append(method)
         
@@ -105,7 +103,7 @@ class LangGenerator(generator.Generator):
             ]),
             gen.Statement('++it')
         ]))
-        method.append(gen.Statement('return buffer.insert(it, { .block_id = block_id, .timestamp = timestamp })->data'))
+        method.append(gen.Statement('return buffer.insert(it, { .block_id = block_id })->data'))
 
         # Helper method for marhsal
         method = gen.Method('bool', f'check_buffer', [
@@ -273,6 +271,7 @@ class LangGenerator(generator.Generator):
         #if message.base.name is not None:
         #    base = f': public {message.base.name.eval()}'
 
+        # Normal struct
         struct = gen.Class(message_name, decl_name_base=base, cpp_style=True, keyword='struct')
         for decl in self.message_fields_including_base_and_ignored(message):
             dtype = decl.dtype.dtype.eval()
@@ -297,6 +296,33 @@ class LangGenerator(generator.Generator):
             ))
 
         self.structs_file.add(struct)
+
+        # Pack struct
+        struct = gen.Class(f'_packed_{message_name}', decl_name_base=base, cpp_style=True, keyword='struct', pack=True)
+        for decl in self.message_fields_including_base_and_ignored(message):
+            dtype = decl.dtype.dtype.eval()
+            ctype = '{}'
+            if decl.optional:
+                ctype = 'std::optional<{}>'
+
+            temp = dtype
+            if dtype == 'vector':
+                ctype = ctype.format('std::vector<{}>')
+                temp = decl.dtype.spec.eval()
+            
+            if not self.is_message(temp):
+                temp = TYPE_CONVERSION[temp]
+            
+            ctype = ctype.format(temp)
+
+            struct.attributes.append(gen.Attribute(
+                ctype, 
+                decl.name.eval(),
+                visibility=gen.Visibility.PUBLIC
+            ))
+
+        self.structs_file.add(struct)
+        
 
     def _generate_base_structure(self, base):
         if base != 'has_id':
@@ -375,7 +401,7 @@ class LangGenerator(generator.Generator):
         methods.append(method)
 
         if self.__is_trivial(message):
-            message_size_str = f'sizeof({message_name})'
+            message_size_str = f'sizeof(_packed_{message_name})'
             ignore_fields = self.message_ignore_fields(message)
             for decl in ignore_fields:
                 dtype = decl.dtype.dtype.eval()
@@ -598,7 +624,7 @@ class LangGenerator(generator.Generator):
             gen.Statement('return ::kaminari::marshal_parse_state::parsing_skipped')
         ]))
 
-        method.append(gen.Statement(f'auto& data = emplace_data(_{program_name}, block_id, packet->timestamp())'))
+        method.append(gen.Statement(f'auto& data = emplace_data(_{program_name}, block_id)'))
         method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
         method.append(gen.Block([
             gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
@@ -617,7 +643,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement('#endif', ending=''),
                 gen.Statement(f'_{program_name}_since_last_peeked = 0'),
                 gen.Statement(f'_{program_name}_last_peeked = block_id'),
-                gen.Statement(f'peek_{program_name}(client, data, packet->timestamp())'),
+                gen.Statement(f'peek_{program_name}(client, data, block_id)'),
                 gen.Statement('return ::kaminari::marshal_parse_state::parsing_done')
             ])
         ]))
@@ -649,7 +675,7 @@ class LangGenerator(generator.Generator):
             gen.Statement('template <typename M>', ending=''),
             gen.Statement(f'concept has_peek_{program_name} = requires(M m, {message_name} d)', ending=''),
             gen.Block([
-                gen.Statement(f'{{ m.peek_{program_name}((::kaminari::basic_client*)nullptr, d, (uint64_t)0) }} -> std::same_as<bool> ')
+                gen.Statement(f'{{ m.peek_{program_name}((::kaminari::basic_client*)nullptr, d, (uint16_t)0) }} -> std::same_as<bool> ')
             ], ending=';')
         ]))
         
@@ -787,7 +813,7 @@ class LangGenerator(generator.Generator):
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
                 gen.Statement(f'spdlog::debug("Calling on_{x}@({{}} < {{}} - {{}})", data.block_id, block_id, _{x}_buffer_size)'),
                 gen.Statement('#endif', ending=''),
-                gen.Statement(f'if (!on_{x}(client, data.data, data.timestamp))', ending=''),
+                gen.Statement(f'if (!on_{x}(client, data.data, data.block_id))', ending=''),
                 gen.Block([
                     gen.Statement('break')
                 ]),
@@ -991,7 +1017,13 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'#include <optional>', ending=''),
                 gen.Statement(f'#include <vector>', ending=''),
                 gen.Statement(f'#include <string>', ending=''),
-                gen.Statement(f'#include <inttypes.h>', ending='')
+                gen.Statement(f'#include <inttypes.h>', ending=''),
+                gen.Statement('#ifdef __GNUC__', ending=''),
+                gen.Statement('#define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))', ending=''),
+                gen.Statement('#endif', ending=''),
+                gen.Statement('#ifdef _MSC_VER', ending=''),
+                gen.Statement('#define PACK( __Declaration__ ) __pragma( pack(push, 1) ) __Declaration__ __pragma( pack(pop))', ending=''),
+                gen.Statement('#endif', ending='')
             ]))
 
         with open(f'{path}/opcodes.hpp', 'w') as fp:
