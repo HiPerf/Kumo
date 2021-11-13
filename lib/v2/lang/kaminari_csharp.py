@@ -109,7 +109,7 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PROTECTED, postfix=' where T : new()')
         self.marshal_cls.methods.append(method)
 
-        method.append(gen.Statement('return buffer.Count > 0 && Kaminari.Overflow.le(buffer.Values[0].BlockId, Kaminari.Overflow.sub(blockId, (ushort)bufferSize))'))
+        method.append(gen.Statement('return buffer.Count > 0 && Kaminari.Overflow.leq(buffer.Values[0].BlockId, Kaminari.Overflow.sub(blockId, (ushort)bufferSize))'))
 
         # Flush IClient 
         self.client_itf = gen.Class('IClient : Kaminari.IBaseClient', csharp_style=True, decl_modifiers=[gen.Visibility.PUBLIC.value], keyword='interface')

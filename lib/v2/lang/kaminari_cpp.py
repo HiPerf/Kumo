@@ -113,7 +113,7 @@ class LangGenerator(generator.Generator):
         ], visibility=gen.Visibility.PROTECTED, template=gen.Statement('template <typename T>', ending=''), decl_modifiers=['inline'])
         self.marshal_cls.methods.append(method)
         
-        method.append(gen.Statement('return !buffer.empty() && cx::overflow::le(buffer.front().block_id, cx::overflow::sub(block_id, static_cast<uint16_t>(buffer_size)))'))
+        method.append(gen.Statement('return !buffer.empty() && cx::overflow::leq(buffer.front().block_id, cx::overflow::sub(block_id, static_cast<uint16_t>(buffer_size)))'))
 
         # Add struct and class
         self.marshal_file.add(data_struct)
@@ -807,11 +807,18 @@ class LangGenerator(generator.Generator):
 
             # Update method
             marshal_update.append(gen.Statement(f'_{x}_since_last_called = std::max(_{x}_since_last_called, cx::overflow::inc(_{x}_since_last_called))'))
+            marshal_update.append(gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''))
+            marshal_update.append(gen.Statement(f'if (!check_buffer(_{x}, block_id, _{x}_buffer_size) && !_{x}.empty())', ending=''))
+            marshal_update.append(gen.Block([
+                gen.Statement(f'auto& data = _{x}.front()'),
+                gen.Statement(f'spdlog::debug("NOT calling on_{x}@({{}} > {{}} - {{}})", data.block_id, block_id, _{x}_buffer_size)')
+            ]))
+            marshal_update.append(gen.Statement('#endif', ending=''))
             marshal_update.append(gen.Statement(f'while (check_buffer(_{x}, block_id, _{x}_buffer_size))', ending=''))
             marshal_update.append(gen.Block([
                 gen.Statement(f'auto& data = _{x}.front()'),
                 gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
-                gen.Statement(f'spdlog::debug("Calling on_{x}@({{}} < {{}} - {{}})", data.block_id, block_id, _{x}_buffer_size)'),
+                gen.Statement(f'spdlog::debug("Calling on_{x}@({{}} <= {{}} - {{}})", data.block_id, block_id, _{x}_buffer_size)'),
                 gen.Statement('#endif', ending=''),
                 gen.Statement(f'if (!on_{x}(client, data.data, data.block_id))', ending=''),
                 gen.Block([
