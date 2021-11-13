@@ -25,5 +25,5 @@ lg.add("COLON", r":")
 lg.add("COMMA", r",")
 lg.add("DOT", r".")
 lg.ignore(r"\s+")  # Ignore whitespace
-lg.ignore(r"#.*\n")  # Ignore comments
+lg.ignore(r"#.*(\n|$)")  # Ignore comments
 
