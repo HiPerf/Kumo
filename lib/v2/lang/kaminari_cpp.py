@@ -272,56 +272,40 @@ class LangGenerator(generator.Generator):
         #    base = f': public {message.base.name.eval()}'
 
         # Normal struct
-        struct = gen.Class(message_name, decl_name_base=base, cpp_style=True, keyword='struct')
-        for decl in self.message_fields_including_base_and_ignored(message):
-            dtype = decl.dtype.dtype.eval()
-            ctype = '{}'
-            if decl.optional:
-                ctype = 'std::optional<{}>'
+        name_and_packed = [
+            (message_name, False),
+            (f'_packed_{message_name}', True)
+        ]
 
-            temp = dtype
-            if dtype == 'vector':
-                ctype = ctype.format('std::vector<{}>')
-                temp = decl.dtype.spec.eval()
-            
-            if not self.is_message(temp):
-                temp = TYPE_CONVERSION[temp]
-            
-            ctype = ctype.format(temp)
+        for struct_name, is_packed in name_and_packed:
+            # Non-trivial packets can not be packed!
+            if is_packed and not self.__is_trivial(message):
+                continue
 
-            struct.attributes.append(gen.Attribute(
-                ctype, 
-                decl.name.eval(),
-                visibility=gen.Visibility.PUBLIC
-            ))
+            struct = gen.Class(struct_name, decl_name_base=base, cpp_style=True, keyword='struct', pack=is_packed)
+            for decl in self.message_fields_including_base_and_ignored(message):
+                dtype = decl.dtype.dtype.eval()
+                ctype = '{}'
+                if decl.optional:
+                    ctype = 'std::optional<{}>'
 
-        self.structs_file.add(struct)
+                temp = dtype
+                if dtype == 'vector':
+                    ctype = ctype.format('std::vector<{}>')
+                    temp = decl.dtype.spec.eval()
+                
+                if not self.is_message(temp):
+                    temp = TYPE_CONVERSION[temp]
+                
+                ctype = ctype.format(temp)
 
-        # Pack struct
-        struct = gen.Class(f'_packed_{message_name}', decl_name_base=base, cpp_style=True, keyword='struct', pack=True)
-        for decl in self.message_fields_including_base_and_ignored(message):
-            dtype = decl.dtype.dtype.eval()
-            ctype = '{}'
-            if decl.optional:
-                ctype = 'std::optional<{}>'
+                struct.attributes.append(gen.Attribute(
+                    ctype, 
+                    decl.name.eval(),
+                    visibility=gen.Visibility.PUBLIC
+                ))
 
-            temp = dtype
-            if dtype == 'vector':
-                ctype = ctype.format('std::vector<{}>')
-                temp = decl.dtype.spec.eval()
-            
-            if not self.is_message(temp):
-                temp = TYPE_CONVERSION[temp]
-            
-            ctype = ctype.format(temp)
-
-            struct.attributes.append(gen.Attribute(
-                ctype, 
-                decl.name.eval(),
-                visibility=gen.Visibility.PUBLIC
-            ))
-
-        self.structs_file.add(struct)
+            self.structs_file.add(struct)
         
 
     def _generate_base_structure(self, base):
