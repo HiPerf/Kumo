@@ -577,7 +577,7 @@ class LangGenerator(generator.Generator):
         ], template=gen.Statement('template <typename C>', ending=''), visibility=gen.Visibility.PRIVATE)
 
         method.append(gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''))
-        method.append(gen.Statement(f'spdlog::debug("Received packet `{program_name}({message_name})@{{}}` with _last_peeked={{}} & _since_last_peeked={{}} (enabled={{}}), _last_called={{}} and _since_last_called={{}}", block_id, _{program_name}_last_peeked, _{program_name}_since_last_peeked, has_peek_{program_name}<marshal>, _{program_name}_last_called, _{program_name}_since_last_called)'))
+        method.append(gen.Statement(f'spdlog::debug("Received packet `{program_name}({message_name})@{{}}` with (enabled={{}})", block_id, has_peek_{program_name}<marshal>)'))
         method.append(gen.Statement('#endif', ending=''))
 
         if program.cond.attr is not None:
@@ -599,15 +599,6 @@ class LangGenerator(generator.Generator):
                 gen.Statement('return ::kaminari::marshal_parse_state::parsing_skipped')
             ]))
         
-        method.append(gen.Statement(f'if (_{program_name}_since_last_called < 100 && cx::overflow::le(block_id, _{program_name}_last_called))', ending=''))
-        method.append(gen.Block([
-            gen.Statement('// TODO: Returning true here means the packet is understood as correctly parsed, while we are ignoring it', ending=''),
-            gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
-            gen.Statement(f'spdlog::KUMO_ERROR_LOG_LEVEL(" > Out of order")'),
-            gen.Statement('#endif', ending=''),
-            gen.Statement('return ::kaminari::marshal_parse_state::parsing_skipped')
-        ]))
-
         method.append(gen.Statement(f'auto& data = emplace_data(_{program_name}, block_id)'))
         method.append(gen.Statement(f'if (!unpack(packet, data))', ending=''))
         method.append(gen.Block([
@@ -619,17 +610,10 @@ class LangGenerator(generator.Generator):
 
         method.append(gen.Statement(f'if constexpr (has_peek_{program_name}<marshal>)', ending=''))
         method.append(gen.Block([
-            gen.Statement(f'_{program_name}_since_last_peeked = std::max(_{program_name}_since_last_peeked, cx::overflow::inc(_{program_name}_since_last_peeked))'),
-            gen.Statement(f'if (_{program_name}_since_last_peeked > 100 || cx::overflow::ge(block_id, _{program_name}_last_peeked))', ending=''),
-            gen.Block([
-                gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
-                gen.Statement(f'spdlog::debug(" >> Peeking")'),
-                gen.Statement('#endif', ending=''),
-                gen.Statement(f'_{program_name}_since_last_peeked = 0'),
-                gen.Statement(f'_{program_name}_last_peeked = block_id'),
-                gen.Statement(f'peek_{program_name}(client, data, block_id)'),
-                gen.Statement('return ::kaminari::marshal_parse_state::parsing_done')
-            ])
+            gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''),
+            gen.Statement(f'spdlog::debug(" >> Peeking")'),
+            gen.Statement('#endif', ending=''),
+            gen.Statement(f'peek_{program_name}(client, data, block_id)'),
         ]))
 
         method.append(gen.Statement('return ::kaminari::marshal_parse_state::parsing_done'))
@@ -639,10 +623,6 @@ class LangGenerator(generator.Generator):
 
         self.marshal_cls.attributes.append(gen.Attribute(f'boost::circular_buffer<::kumo::data_buffer<::kumo::{message_name}>>', f'_{program_name}'))
         self.marshal_cls.attributes.append(gen.Attribute(f'uint8_t', f'_{program_name}_buffer_size'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_last_peeked'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_since_last_peeked'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'uint16_t', f'_{program_name}_last_called'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'uint8_t', f'_{program_name}_since_last_called'))
 
         # Methods to get/set buffer size
         set_method = gen.Method('void', f'{program_name}_buffer_size', [gen.Variable('uint8_t', 'buffer_size')], 
@@ -760,37 +740,20 @@ class LangGenerator(generator.Generator):
             # Constructor initializer
             marshal_constructor.initializers.append(gen.Statement(f'_{x}({buffer_size * 2})', ending=''))
             marshal_constructor.initializers.append(gen.Statement(f'_{x}_buffer_size({buffer_size})', ending=''))
-            marshal_constructor.initializers.append(gen.Statement(f'_{x}_last_peeked(0)', ending=''))
-            marshal_constructor.initializers.append(gen.Statement(f'_{x}_since_last_peeked(0)', ending=''))
-            marshal_constructor.initializers.append(gen.Statement(f'_{x}_last_called(0)', ending=''))
-            marshal_constructor.initializers.append(gen.Statement(f'_{x}_since_last_called(0)', ending=''))
 
             # Move constructor initializer
             marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_buffer_size(other._{x}_buffer_size)', ending=''))
-            marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_last_peeked(other._{x}_last_peeked)', ending=''))
-            marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_since_last_peeked(other._{x}_since_last_peeked)', ending=''))
-            marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_last_called(other._{x}_last_called)', ending=''))
-            marshal_move_constructor.initializers.append(gen.Statement(f'_{x}_since_last_called(other._{x}_since_last_called)', ending=''))
             marshal_move_constructor.append(gen.Statement(f'_{x}.swap(other._{x})'))
 
             # Operator=
             marshal_move_op.append(gen.Statement(f'_{x}.swap(other._{x})'))
             marshal_move_op.append(gen.Statement(f'_{x}_buffer_size = other._{x}_buffer_size'))
-            marshal_move_op.append(gen.Statement(f'_{x}_last_peeked = other._{x}_last_peeked'))
-            marshal_move_op.append(gen.Statement(f'_{x}_since_last_peeked = other._{x}_since_last_peeked'))
-            marshal_move_op.append(gen.Statement(f'_{x}_last_called = other._{x}_last_called'))
-            marshal_move_op.append(gen.Statement(f'_{x}_since_last_called = other._{x}_since_last_called'))
 
             # Reset
             marshal_reset.append(gen.Statement(f'_{x}.clear()'))
             marshal_reset.append(gen.Statement(f'_{x}_buffer_size = {buffer_size}'))
-            marshal_reset.append(gen.Statement(f'_{x}_last_peeked = 0'))
-            marshal_reset.append(gen.Statement(f'_{x}_since_last_peeked = 200'))
-            marshal_reset.append(gen.Statement(f'_{x}_last_called = 0'))
-            marshal_reset.append(gen.Statement(f'_{x}_since_last_called = 200'))
 
             # Update method
-            marshal_update.append(gen.Statement(f'_{x}_since_last_called = std::max(_{x}_since_last_called, cx::overflow::inc(_{x}_since_last_called))'))
             marshal_update.append(gen.Statement('#if defined(KUMO_ENABLE_DEBUG_LOGS)', ending=''))
             marshal_update.append(gen.Statement(f'if (!check_buffer(_{x}, block_id, _{x}_buffer_size) && !_{x}.empty())', ending=''))
             marshal_update.append(gen.Block([
@@ -808,8 +771,6 @@ class LangGenerator(generator.Generator):
                 gen.Block([
                     gen.Statement('break')
                 ]),
-                gen.Statement(f'_{x}_last_called = data.block_id'),
-                gen.Statement(f'_{x}_since_last_called = 0'),
                 gen.Statement(f'_{x}.pop_front()')
             ]))
         

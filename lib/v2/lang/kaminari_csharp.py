@@ -706,11 +706,6 @@ class LangGenerator(generator.Generator):
                 gen.Statement(f'return Kaminari.MarshalParseState.ParsingSkipped')
             ]))
         
-        method.append(gen.Statement(f'if ({to_camel_case(program_name, capitalize=False)}SinceLastCalled < 100 && Kaminari.Overflow.le(blockId, {to_camel_case(program_name, capitalize=False)}LastCalled))', ending=''))
-        method.append(gen.Block([
-            gen.Statement('return Kaminari.MarshalParseState.ParsingSkipped')
-        ]))
-
         method.append(gen.Statement(f'var data = emplaceData({to_camel_case(program_name, capitalize=False)}, blockId)'))
         method.append(gen.Statement(f'if (!data.unpack(marshal, packet))', ending=''))
         method.append(gen.Block([
@@ -719,14 +714,7 @@ class LangGenerator(generator.Generator):
 
         method.append(gen.Statement('// The user is assumed to provide all peek methods in C#', ending=''))
         method.append(gen.Statement('// TODO: Test if the method exists in the class', ending=''))
-        method.append(gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked = Math.Max({to_camel_case(program_name, capitalize=False)}SinceLastPeeked, Kaminari.Overflow.inc({to_camel_case(program_name, capitalize=False)}SinceLastCalled))'))
-        method.append(gen.Statement(f'if ({to_camel_case(program_name, capitalize=False)}SinceLastPeeked > 100 || Kaminari.Overflow.ge(blockId, {to_camel_case(program_name, capitalize=False)}LastPeeked))', ending=''))
-        method.append(gen.Block([
-            gen.Statement(f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked = 0'),
-            gen.Statement(f'{to_camel_case(program_name, capitalize=False)}LastPeeked = blockId'),
-            gen.Statement(f'client.peek{to_camel_case(program_name)}(data, blockId)'),
-            gen.Statement(f'return Kaminari.MarshalParseState.ParsingDone')
-        ]))
+        method.append(gen.Statement(f'client.peek{to_camel_case(program_name)}(data, blockId)'))
 
         method.append(gen.Statement(f'return Kaminari.MarshalParseState.ParsingDone'))
 
@@ -735,10 +723,6 @@ class LangGenerator(generator.Generator):
 
         self.marshal_cls.attributes.append(gen.Attribute(f'SortedList<ushort, DataBuffer<{to_camel_case(message_name)}>>', f'{to_camel_case(program_name, capitalize=False)}'))
         self.marshal_cls.attributes.append(gen.Proppertie(f'byte', f'{to_camel_case(program_name, capitalize=False)}BufferSize', True, True))
-        self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastPeeked'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}SinceLastPeeked'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'ushort', f'{to_camel_case(program_name, capitalize=False)}LastCalled'))
-        self.marshal_cls.attributes.append(gen.Attribute(f'byte', f'{to_camel_case(program_name, capitalize=False)}SinceLastCalled'))
 
         return [method]
 
@@ -855,13 +839,8 @@ class LangGenerator(generator.Generator):
             x = to_camel_case(program_name, capitalize=False)
             marshal_constructor.append(gen.Statement(f'{x} = new SortedList<ushort, DataBuffer<{message_name}>>(new Kaminari.DuplicateKeyComparer())'))
             marshal_constructor.append(gen.Statement(f'{x}BufferSize = {buffer_size}'))
-            marshal_constructor.append(gen.Statement(f'{x}LastPeeked = 0'))
-            marshal_constructor.append(gen.Statement(f'{x}SinceLastPeeked = 0'))
-            marshal_constructor.append(gen.Statement(f'{x}LastCalled = 0'))
-            marshal_constructor.append(gen.Statement(f'{x}SinceLastCalled = 0'))
 
             # Update method
-            marshal_update.append(gen.Statement(f'{x}SinceLastCalled = Math.Max({x}SinceLastCalled, Kaminari.Overflow.inc({x}SinceLastCalled))'))
             marshal_update.append(gen.Statement(f'while (checkBuffer({x}, blockId, {x}BufferSize))', ending=''))
             marshal_update.append(gen.Block([
                 gen.Statement(f'var data = {x}.Values[0]'),
@@ -869,17 +848,11 @@ class LangGenerator(generator.Generator):
                 gen.Block([
                     gen.Statement('break')
                 ]),
-                gen.Statement(f'{x}LastCalled = data.BlockId'),
-                gen.Statement(f'{x}SinceLastCalled = 0'),
                 gen.Statement(f'{x}.RemoveAt(0)')
             ]))
 
             # Reset
             marshal_reset.append(gen.Statement(f'{x}BufferSize = {buffer_size}'))
-            marshal_reset.append(gen.Statement(f'{x}LastPeeked = 0'))
-            marshal_reset.append(gen.Statement(f'{x}SinceLastPeeked = 255'))
-            marshal_reset.append(gen.Statement(f'{x}LastCalled = 0'))
-            marshal_reset.append(gen.Statement(f'{x}SinceLastCalled = 255'))
         
         # IClient
         for program_name in self.handler_programs:
